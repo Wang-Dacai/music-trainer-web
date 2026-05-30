@@ -1,0 +1,37 @@
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Node / Vite
+node_modules/
+dist/
+coverage/
+.vite/
+.playwright-cli/
+
+# 本地环境变量
+.env
+.env.*
+!.env.example
+
+# 项目本地数据：保留说明文件和小样例，忽略大体积输入、缓存和输出
+data/input/
+data/output/
+data/cache/
+
+# 编辑器和系统临时文件
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.example.json
+*.swp
+*.swo
+
+# 运行日志和临时备份
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.tmp
+*.bak
