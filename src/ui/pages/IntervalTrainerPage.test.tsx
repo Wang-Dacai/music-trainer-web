@@ -77,6 +77,7 @@ describe('IntervalTrainerPage', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     cleanup()
   })
 
@@ -91,19 +92,69 @@ describe('IntervalTrainerPage', () => {
     expect(screen.getByRole('status')).toHaveTextContent('第 1 题')
     expect(screen.getByLabelText('五线谱题目')).toHaveTextContent('mock staff')
     expect(screen.getByText('五线内自然音')).toBeInTheDocument()
+    expect(screen.getByLabelText('完成题 0')).toBeInTheDocument()
+    expect(screen.getByLabelText('本题 0/3')).toBeInTheDocument()
+    expect(screen.getByLabelText('正确率 0%')).toBeInTheDocument()
+    expect(screen.getByLabelText('连对 0')).toBeInTheDocument()
 
     await user.click(within(screen.getByRole('group', { name: '第一个音' })).getByRole('button', { name: 'C4' }))
     expect(screen.getByRole('status')).toHaveTextContent('已完成 1 / 3 项判断')
     expect(within(screen.getByRole('group', { name: '第一个音' })).getByRole('button', { name: 'C4' })).toBeDisabled()
+    expect(screen.getByLabelText('本题 1/3')).toBeInTheDocument()
+    expect(screen.getByLabelText('正确率 100%')).toBeInTheDocument()
 
     await user.click(within(screen.getByRole('group', { name: '第二个音' })).getByRole('button', { name: 'F4' }))
     expect(within(screen.getByRole('group', { name: '第二个音' })).getByRole('button', { name: 'E4' })).toHaveClass('is-correct')
     expect(within(screen.getByRole('group', { name: '第二个音' })).getByRole('button', { name: 'F4' })).toHaveClass('is-incorrect')
+    expect(screen.getByLabelText('本题 2/3')).toBeInTheDocument()
+    expect(screen.getByLabelText('正确率 50%')).toBeInTheDocument()
 
     await user.click(within(screen.getByRole('group', { name: '音程关系' })).getByRole('button', { name: '大三度' }))
     expect(screen.getByRole('status')).toHaveTextContent('本题完成，正在进入下一题')
+    expect(screen.getByLabelText('完成题 1')).toBeInTheDocument()
+    expect(screen.getByLabelText('正确率 67%')).toBeInTheDocument()
+    expect(screen.getByLabelText('连对 0')).toBeInTheDocument()
 
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('第 2 题'), { timeout: 1200 })
+    expect(within(screen.getByRole('group', { name: '第一个音' })).getByRole('button', { name: 'G4' })).toBeEnabled()
+    expect(screen.getByLabelText('本题 0/3')).toBeInTheDocument()
+  })
+
+  it('可选择三秒后自动进入下一题', async () => {
+    const user = userEvent.setup()
+
+    render(<IntervalTrainerPage />)
+    await user.selectOptions(screen.getByRole('combobox', { name: '下一题' }), 'delayed')
+    await user.click(screen.getByRole('button', { name: '开始游戏' }))
+    await user.click(within(screen.getByRole('group', { name: '第一个音' })).getByRole('button', { name: 'C4' }))
+    await user.click(within(screen.getByRole('group', { name: '第二个音' })).getByRole('button', { name: 'E4' }))
+    await user.click(within(screen.getByRole('group', { name: '音程关系' })).getByRole('button', { name: '大三度' }))
+
+    expect(screen.getByRole('status')).toHaveTextContent('本题完成，可查看答案，3 秒后进入下一题')
+    expect(generateStaffIntervalExercise).toHaveBeenCalledTimes(1)
+
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('第 2 题'), { timeout: 3800 })
+  }, 6000)
+
+  it('可选择手动进入下一题，答错后保留正确答案', async () => {
+    const user = userEvent.setup()
+
+    render(<IntervalTrainerPage />)
+    await user.selectOptions(screen.getByRole('combobox', { name: '下一题' }), 'manual')
+    expect(screen.getByRole('status')).toHaveTextContent('已选择下一题方式：手动')
+
+    await user.click(screen.getByRole('button', { name: '开始游戏' }))
+    await user.click(within(screen.getByRole('group', { name: '第一个音' })).getByRole('button', { name: 'C4' }))
+    await user.click(within(screen.getByRole('group', { name: '第二个音' })).getByRole('button', { name: 'F4' }))
+    await user.click(within(screen.getByRole('group', { name: '音程关系' })).getByRole('button', { name: '大三度' }))
+
+    expect(screen.getByRole('status')).toHaveTextContent('本题完成，可查看答案，点击“下一题”继续')
+    expect(generateStaffIntervalExercise).toHaveBeenCalledTimes(1)
+    expect(within(screen.getByRole('group', { name: '第二个音' })).getByRole('button', { name: 'E4' })).toHaveClass('is-correct')
+    expect(within(screen.getByRole('group', { name: '第二个音' })).getByRole('button', { name: 'F4' })).toHaveClass('is-incorrect')
+
+    await user.click(screen.getByRole('button', { name: '下一题' }))
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('第 2 题'))
     expect(within(screen.getByRole('group', { name: '第一个音' })).getByRole('button', { name: 'G4' })).toBeEnabled()
   })
 
@@ -111,7 +162,7 @@ describe('IntervalTrainerPage', () => {
     const user = userEvent.setup()
 
     render(<IntervalTrainerPage />)
-    await user.click(screen.getByRole('button', { name: '低音' }))
+    await user.selectOptions(screen.getByRole('combobox', { name: '谱号' }), 'bass')
     expect(screen.getByRole('status')).toHaveTextContent('已选择低音谱号')
 
     await user.click(screen.getByRole('button', { name: '开始游戏' }))
@@ -126,7 +177,7 @@ describe('IntervalTrainerPage', () => {
     const user = userEvent.setup()
 
     render(<IntervalTrainerPage />)
-    await user.click(screen.getByRole('button', { name: '进阶' }))
+    await user.selectOptions(screen.getByRole('combobox', { name: '难度' }), 'intermediate')
     expect(screen.getByRole('status')).toHaveTextContent('已选择进阶难度')
 
     await user.click(screen.getByRole('button', { name: '开始游戏' }))
