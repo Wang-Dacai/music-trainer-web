@@ -2,10 +2,12 @@ import { createPitch, type Accidental, type NoteStep, type Pitch } from './pitch
 
 export type StaffClefName = 'treble' | 'bass' | 'alto' | 'tenor'
 export type StaffAnswerGroup = 'firstPitch' | 'secondPitch' | 'interval'
+export type StaffDifficultyId = 'beginner' | 'easy' | 'intermediate' | 'advanced'
 
 export interface StaffIntervalExercise {
   id: string
   clef: StaffClefName
+  difficulty: StaffDifficultyId
   firstPitch: Pitch
   secondPitch: Pitch
   firstPitchAnswer: string
@@ -16,9 +18,16 @@ export interface StaffIntervalExercise {
 
 export interface GenerateStaffIntervalExerciseOptions {
   clef: StaffClefName
+  difficulty?: StaffDifficultyId
   random?: () => number
   idFactory?: () => string
   maxAttempts?: number
+}
+
+export interface StaffDifficultyLevel {
+  id: StaffDifficultyId
+  label: string
+  summary: string
 }
 
 export const STAFF_CLEF_LABELS: Record<StaffClefName, string> = {
@@ -27,6 +36,15 @@ export const STAFF_CLEF_LABELS: Record<StaffClefName, string> = {
   alto: '中音',
   tenor: '次中音',
 }
+
+export const DEFAULT_STAFF_DIFFICULTY_ID: StaffDifficultyId = 'beginner'
+
+export const STAFF_DIFFICULTY_LEVELS: StaffDifficultyLevel[] = [
+  { id: 'beginner', label: '入门', summary: '五线内自然音；无升降号、还原号和额外加线；音程限常见一到五度。' },
+  { id: 'easy', label: '基础', summary: '使用当前谱号完整音域；只出现自然音；音程扩展到八度。' },
+  { id: 'intermediate', label: '进阶', summary: '控制在五线内；可出现升号和降号；加入常见增减音程。' },
+  { id: 'advanced', label: '挑战', summary: '使用完整音域；可出现升号、降号和还原号；使用完整音程候选。' },
+]
 
 export const STAFF_PITCHES_BY_CLEF: Record<StaffClefName, readonly string[]> = {
   treble: [
@@ -79,6 +97,13 @@ export const STAFF_PITCHES_BY_CLEF: Record<StaffClefName, readonly string[]> = {
   tenor: ['A2', 'B2', 'C3', 'D3', 'E3', 'F3', 'G3', 'A3', 'B3', 'C4', 'D4', 'E4', 'F4', 'G4'],
 }
 
+export const STAFF_BEGINNER_PITCHES_BY_CLEF: Record<StaffClefName, readonly string[]> = {
+  treble: ['E4', 'F4', 'G4', 'A4', 'B4', 'C5', 'D5', 'E5', 'F5'],
+  bass: ['G2', 'A2', 'B2', 'C3', 'D3', 'E3', 'F3', 'G3', 'A3'],
+  alto: ['F3', 'G3', 'A3', 'B3', 'C4', 'D4', 'E4', 'F4', 'G4'],
+  tenor: ['D3', 'E3', 'F3', 'G3', 'A3', 'B3', 'C4', 'D4', 'E4'],
+}
+
 export const STAFF_INTERVAL_NAMES: Record<string, string> = {
   P1: '纯一度',
   A1: '增一度',
@@ -105,6 +130,7 @@ export const STAFF_INTERVAL_NAMES: Record<string, string> = {
   A5: '增五度',
   AA5: '倍增五度',
   dd5: '倍减五度',
+  d6: '减六度',
   m6: '小六度',
   M6: '大六度',
   A6: '增六度',
@@ -123,7 +149,60 @@ export const STAFF_INTERVAL_NAMES: Record<string, string> = {
   dd8: '倍减八度',
 }
 
-const STAFF_ACCIDENTALS: Accidental[] = [null, 'sharp', 'flat', 'natural']
+interface StaffDifficultyConfig {
+  pitchPoolByClef: Record<StaffClefName, readonly string[]>
+  accidentals: readonly Accidental[]
+  intervalChoiceCandidates: readonly string[]
+  allowedIntervalNames?: readonly string[]
+}
+
+const BEGINNER_INTERVAL_NAMES = ['纯一度', '小二度', '大二度', '小三度', '大三度', '纯四度', '纯五度']
+const NATURAL_INTERVAL_NAMES = [...BEGINNER_INTERVAL_NAMES, '小六度', '大六度', '小七度', '大七度', '纯八度']
+const COMMON_INTERVAL_NAMES = [
+  ...NATURAL_INTERVAL_NAMES,
+  '增一度',
+  '减二度',
+  '增二度',
+  '减三度',
+  '增三度',
+  '减四度',
+  '增四度',
+  '减五度',
+  '增五度',
+  '减六度',
+  '增六度',
+  '减七度',
+  '增七度',
+  '减八度',
+  '增八度',
+]
+
+const STAFF_DIFFICULTY_CONFIGS: Record<StaffDifficultyId, StaffDifficultyConfig> = {
+  beginner: {
+    pitchPoolByClef: STAFF_BEGINNER_PITCHES_BY_CLEF,
+    accidentals: [null],
+    intervalChoiceCandidates: BEGINNER_INTERVAL_NAMES,
+    allowedIntervalNames: BEGINNER_INTERVAL_NAMES,
+  },
+  easy: {
+    pitchPoolByClef: STAFF_PITCHES_BY_CLEF,
+    accidentals: [null],
+    intervalChoiceCandidates: NATURAL_INTERVAL_NAMES,
+    allowedIntervalNames: NATURAL_INTERVAL_NAMES,
+  },
+  intermediate: {
+    pitchPoolByClef: STAFF_BEGINNER_PITCHES_BY_CLEF,
+    accidentals: [null, 'sharp', 'flat'],
+    intervalChoiceCandidates: COMMON_INTERVAL_NAMES,
+    allowedIntervalNames: COMMON_INTERVAL_NAMES,
+  },
+  advanced: {
+    pitchPoolByClef: STAFF_PITCHES_BY_CLEF,
+    accidentals: [null, 'sharp', 'flat', 'natural'],
+    intervalChoiceCandidates: Object.values(STAFF_INTERVAL_NAMES),
+  },
+}
+
 const STEP_ORDER: NoteStep[] = ['C', 'D', 'E', 'F', 'G', 'A', 'B']
 const PERFECT_BASE_SEMITONES: Record<number, number> = {
   1: 0,
@@ -140,16 +219,20 @@ const MAJOR_BASE_SEMITONES: Record<number, number> = {
 
 export function generateStaffIntervalExercise(options: GenerateStaffIntervalExerciseOptions): StaffIntervalExercise {
   validateClef(options.clef)
+  const difficulty = options.difficulty ?? DEFAULT_STAFF_DIFFICULTY_ID
+  validateDifficulty(difficulty)
 
   const random = options.random ?? Math.random
   const maxAttempts = options.maxAttempts ?? 500
+  const difficultyConfig = STAFF_DIFFICULTY_CONFIGS[difficulty]
+  const pitchCandidates = difficultyConfig.pitchPoolByClef[options.clef]
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const firstPitch = pickStaffPitch(options.clef, random)
-    const secondPitch = pickStaffPitch(options.clef, random)
+    const firstPitch = pickStaffPitch(options.clef, difficultyConfig, random)
+    const secondPitch = pickStaffPitch(options.clef, difficultyConfig, random)
     const intervalName = calculateStaffIntervalName(firstPitch, secondPitch)
 
-    if (!intervalName) {
+    if (!intervalName || (difficultyConfig.allowedIntervalNames && !difficultyConfig.allowedIntervalNames.includes(intervalName))) {
       continue
     }
 
@@ -159,20 +242,21 @@ export function generateStaffIntervalExercise(options: GenerateStaffIntervalExer
     return {
       id: options.idFactory?.() ?? createDefaultStaffExerciseId(),
       clef: options.clef,
+      difficulty,
       firstPitch,
       secondPitch,
       firstPitchAnswer,
       secondPitchAnswer,
       intervalName,
       choices: {
-        firstPitch: buildStaffChoices(firstPitchAnswer, STAFF_PITCHES_BY_CLEF[options.clef], 4, random),
-        secondPitch: buildStaffChoices(secondPitchAnswer, STAFF_PITCHES_BY_CLEF[options.clef], 4, random),
-        interval: buildStaffChoices(intervalName, Object.values(STAFF_INTERVAL_NAMES), 4, random),
+        firstPitch: buildStaffChoices(firstPitchAnswer, pitchCandidates, 4, random),
+        secondPitch: buildStaffChoices(secondPitchAnswer, pitchCandidates, 4, random),
+        interval: buildStaffChoices(intervalName, difficultyConfig.intervalChoiceCandidates, 4, random),
       },
     }
   }
 
-  throw new Error(`无法生成符合音程范围的${STAFF_CLEF_LABELS[options.clef]}谱号题目`)
+  throw new Error(`无法生成符合${getStaffDifficultyLabel(difficulty)}难度的${STAFF_CLEF_LABELS[options.clef]}谱号题目`)
 }
 
 export function parseStaffPitchName(pitchName: string, accidental: Accidental = null): Pitch {
@@ -225,9 +309,10 @@ export function buildStaffChoices(
   return shuffleWithRandom([correctAnswer, ...distractors], random)
 }
 
-function pickStaffPitch(clef: StaffClefName, random: () => number): Pitch {
-  const pitchName = STAFF_PITCHES_BY_CLEF[clef][getRandomIndex(STAFF_PITCHES_BY_CLEF[clef].length, random)]
-  const accidental = STAFF_ACCIDENTALS[getRandomIndex(STAFF_ACCIDENTALS.length, random)]
+function pickStaffPitch(clef: StaffClefName, difficultyConfig: StaffDifficultyConfig, random: () => number): Pitch {
+  const pitchCandidates = difficultyConfig.pitchPoolByClef[clef]
+  const pitchName = pitchCandidates[getRandomIndex(pitchCandidates.length, random)]
+  const accidental = difficultyConfig.accidentals[getRandomIndex(difficultyConfig.accidentals.length, random)]
 
   return parseStaffPitchName(pitchName, accidental)
 }
@@ -283,6 +368,16 @@ function validateClef(clef: StaffClefName): void {
   if (!(clef in STAFF_PITCHES_BY_CLEF)) {
     throw new Error(`不支持的谱号: ${clef}`)
   }
+}
+
+function validateDifficulty(difficulty: StaffDifficultyId): void {
+  if (!(difficulty in STAFF_DIFFICULTY_CONFIGS)) {
+    throw new Error(`不支持的五线谱练习难度: ${difficulty}`)
+  }
+}
+
+function getStaffDifficultyLabel(difficulty: StaffDifficultyId): string {
+  return STAFF_DIFFICULTY_LEVELS.find((level) => level.id === difficulty)?.label ?? difficulty
 }
 
 function getRandomIndex(length: number, random: () => number): number {

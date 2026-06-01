@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   buildStaffChoices,
   calculateStaffIntervalName,
+  DEFAULT_STAFF_DIFFICULTY_ID,
   generateStaffIntervalExercise,
   normalizeStaffPitchName,
   parseStaffPitchName,
+  STAFF_BEGINNER_PITCHES_BY_CLEF,
   STAFF_CLEF_LABELS,
+  STAFF_DIFFICULTY_LEVELS,
   STAFF_INTERVAL_NAMES,
   STAFF_PITCHES_BY_CLEF,
 } from './staffTrainer'
@@ -27,6 +30,11 @@ describe('staffTrainer', () => {
     expect(STAFF_PITCHES_BY_CLEF.bass).toContain('A1')
     expect(STAFF_PITCHES_BY_CLEF.alto).toContain('C3')
     expect(STAFF_PITCHES_BY_CLEF.tenor).toContain('A2')
+  })
+
+  it('提供五线谱练习难度等级', () => {
+    expect(DEFAULT_STAFF_DIFFICULTY_ID).toBe('beginner')
+    expect(STAFF_DIFFICULTY_LEVELS.map((level) => level.label)).toEqual(['入门', '基础', '进阶', '挑战'])
   })
 
   it('规范化音高答案时移除升降号', () => {
@@ -62,9 +70,38 @@ describe('staffTrainer', () => {
 
     expect(exercise.id).toBe('staff-1')
     expect(exercise.clef).toBe('treble')
+    expect(exercise.difficulty).toBe('beginner')
     expect(exercise.choices.firstPitch).toContain(exercise.firstPitchAnswer)
     expect(exercise.choices.secondPitch).toContain(exercise.secondPitchAnswer)
     expect(exercise.choices.interval).toContain(exercise.intervalName)
     expect(Object.values(STAFF_INTERVAL_NAMES)).toContain(exercise.intervalName)
+  })
+
+  it('入门难度只生成五线内自然音，并使用更基础的音程范围', () => {
+    const exercise = generateStaffIntervalExercise({
+      clef: 'treble',
+      difficulty: 'beginner',
+      random: sequenceRandom([0.2, 0, 0.42, 0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.2, 0.3, 0.4, 0.5, 0.6]),
+      idFactory: () => 'staff-beginner',
+    })
+
+    expect(exercise.firstPitch.accidental).toBeNull()
+    expect(exercise.secondPitch.accidental).toBeNull()
+    expect(STAFF_BEGINNER_PITCHES_BY_CLEF.treble).toContain(exercise.firstPitchAnswer)
+    expect(STAFF_BEGINNER_PITCHES_BY_CLEF.treble).toContain(exercise.secondPitchAnswer)
+    expect(['纯一度', '小二度', '大二度', '小三度', '大三度', '纯四度', '纯五度']).toContain(exercise.intervalName)
+  })
+
+  it('挑战难度可以生成带升降记号的题目', () => {
+    const exercise = generateStaffIntervalExercise({
+      clef: 'treble',
+      difficulty: 'advanced',
+      random: sequenceRandom([0.2, 0.3, 0.3, 0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.2, 0.3, 0.4, 0.5, 0.6]),
+      idFactory: () => 'staff-advanced',
+    })
+
+    expect(exercise.firstPitch.accidental).toBe('sharp')
+    expect(exercise.difficulty).toBe('advanced')
+    expect(exercise.choices.interval).toContain(exercise.intervalName)
   })
 })

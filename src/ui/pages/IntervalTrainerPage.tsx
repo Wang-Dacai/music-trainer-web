@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
+import { playStaffExerciseNotes, preloadStaffPlaybackSounds, stopStaffPlayback } from '../../audio/staffPlayback'
 import {
+  DEFAULT_STAFF_DIFFICULTY_ID,
   generateStaffIntervalExercise,
   STAFF_CLEF_LABELS,
+  STAFF_DIFFICULTY_LEVELS,
   type StaffAnswerGroup,
   type StaffClefName,
+  type StaffDifficultyId,
   type StaffIntervalExercise,
 } from '../../domain/staffTrainer'
 import StaffNotation from '../components/StaffNotation'
@@ -12,6 +16,15 @@ interface AnswerState {
   selected: string
   isCorrect: boolean
 }
+
+interface PracticeStats {
+  completedQuestions: number
+  answeredItems: number
+  correctItems: number
+  streak: number
+}
+
+type NextQuestionMode = 'instant' | 'delayed' | 'manual'
 
 const ANSWER_GROUPS: Array<{
   key: StaffAnswerGroup
@@ -23,24 +36,59 @@ const ANSWER_GROUPS: Array<{
   { key: 'interval', label: '音程关系', description: '判断两个音之间的音程名称' },
 ]
 
+const NEXT_QUESTION_MODES: Array<{ id: NextQuestionMode; label: string }> = [
+  { id: 'instant', label: '立即' },
+  { id: 'delayed', label: '3 秒' },
+  { id: 'manual', label: '手动' },
+]
+
+const NEXT_QUESTION_DELAYS: Record<Exclude<NextQuestionMode, 'manual'>, number> = {
+  instant: 700,
+  delayed: 3000,
+}
+
 export function IntervalTrainerPage() {
   const [clef, setClef] = useState<StaffClefName>('treble')
+  const [difficulty, setDifficulty] = useState<StaffDifficultyId>(DEFAULT_STAFF_DIFFICULTY_ID)
+  const [nextQuestionMode, setNextQuestionMode] = useState<NextQuestionMode>('instant')
   const [isPracticing, setIsPracticing] = useState(false)
   const [exercise, setExercise] = useState<StaffIntervalExercise | null>(null)
   const [answers, setAnswers] = useState<Partial<Record<StaffAnswerGroup, AnswerState>>>({})
   const [status, setStatus] = useState('选择谱号后开始练习')
   const [questionNumber, setQuestionNumber] = useState(0)
+  const [isPlayingNotes, setIsPlayingNotes] = useState(false)
+  const [autoPlayNotes, setAutoPlayNotes] = useState(true)
+  const [practiceStats, setPracticeStats] = useState<PracticeStats>(() => createEmptyPracticeStats())
   const nextTimerRef = useRef<number | null>(null)
+  const playbackTokenRef = useRef(0)
+  const statusRef = useRef(status)
+  const currentDifficulty = STAFF_DIFFICULTY_LEVELS.find((level) => level.id === difficulty) ?? STAFF_DIFFICULTY_LEVELS[0]
+  const answeredCount = Object.keys(answers).length
+  const isQuestionComplete = answeredCount === ANSWER_GROUPS.length
+  const currentQuestionProgress = `${answeredCount}/${ANSWER_GROUPS.length}`
+  const canAdvanceManually = isPracticing && Boolean(exercise) && isQuestionComplete && nextQuestionMode === 'manual'
+  const accuracy = practiceStats.answeredItems > 0 ? Math.round((practiceStats.correctItems / practiceStats.answeredItems) * 100) : 0
 
   useEffect(() => {
-    return () => clearNextTimer()
+    statusRef.current = status
+  }, [status])
+
+  useEffect(() => {
+    preloadStaffPlaybackSounds()
+
+    return () => {
+      clearNextTimer()
+      createPlaybackToken()
+      stopStaffPlayback()
+    }
   }, [])
 
   function startPractice() {
     clearNextTimer()
+    setPracticeStats(createEmptyPracticeStats())
     setIsPracticing(true)
     setQuestionNumber(1)
-    loadNextExercise(clef, 1)
+    loadNextExercise(clef, difficulty, 1)
   }
 
   function stopPractice() {
@@ -48,17 +96,28 @@ export function IntervalTrainerPage() {
     setIsPracticing(false)
     setExercise(null)
     setAnswers({})
+    setIsPlayingNotes(false)
     setQuestionNumber(0)
+    createPlaybackToken()
+    stopStaffPlayback()
     setStatus('已停止')
   }
 
-  function loadNextExercise(nextClef = clef, nextQuestionNumber = questionNumber + 1) {
+  function loadNextExercise(nextClef = clef, nextDifficulty = difficulty, nextQuestionNumber = questionNumber + 1) {
     clearNextTimer()
-    const nextExercise = generateStaffIntervalExercise({ clef: nextClef })
+    createPlaybackToken()
+    stopStaffPlayback()
+    const nextExercise = generateStaffIntervalExercise({ clef: nextClef, difficulty: nextDifficulty })
+    const nextStatus = `第 ${nextQuestionNumber} 题：观察谱面并完成三项判断`
     setExercise(nextExercise)
     setAnswers({})
+    setIsPlayingNotes(false)
     setQuestionNumber(nextQuestionNumber)
-    setStatus(`第 ${nextQuestionNumber} 题：观察谱面并完成三项判断`)
+    setStatus(nextStatus)
+
+    if (autoPlayNotes) {
+      void playExerciseNotes(nextExercise, nextStatus, true)
+    }
   }
 
   function handleClefChange(nextClef: StaffClefName) {
@@ -66,6 +125,69 @@ export function IntervalTrainerPage() {
 
     if (!isPracticing) {
       setStatus(`已选择${STAFF_CLEF_LABELS[nextClef]}谱号`)
+    }
+  }
+
+  async function handlePlayExerciseNotes() {
+    if (!exercise || isPlayingNotes) {
+      return
+    }
+
+    await playExerciseNotes(exercise, status, false)
+  }
+
+  async function playExerciseNotes(targetExercise: StaffIntervalExercise, returnStatus: string, isAutomatic: boolean) {
+    const token = createPlaybackToken()
+    const playbackStatus = isAutomatic ? '正在自动播放本题两个音' : '正在播放本题两个音'
+    setIsPlayingNotes(true)
+    statusRef.current = playbackStatus
+    setStatus(playbackStatus)
+
+    try {
+      await playStaffExerciseNotes(targetExercise.firstPitch, targetExercise.secondPitch)
+    } catch (error) {
+      console.error(error)
+
+      if (isCurrentPlayback(token)) {
+        setStatus('音频播放失败，请确认浏览器允许播放声音')
+      }
+      return
+    } finally {
+      if (isCurrentPlayback(token)) {
+        setIsPlayingNotes(false)
+      }
+    }
+
+    if (isCurrentPlayback(token) && statusRef.current === playbackStatus) {
+      setStatus(returnStatus)
+    }
+  }
+
+  function handleDifficultyChange(nextDifficulty: StaffDifficultyId) {
+    setDifficulty(nextDifficulty)
+
+    if (!isPracticing) {
+      setStatus(`已选择${getDifficultyLabel(nextDifficulty)}难度`)
+    }
+  }
+
+  function handleAutoPlayChange(checked: boolean) {
+    const nextStatus = checked ? '已开启自动播放' : '已关闭自动播放'
+    setAutoPlayNotes(checked)
+    statusRef.current = nextStatus
+    setStatus(nextStatus)
+  }
+
+  function handleNextQuestionModeChange(nextMode: NextQuestionMode) {
+    setNextQuestionMode(nextMode)
+
+    if (isPracticing && exercise && isQuestionComplete) {
+      scheduleNextQuestion(nextMode, questionNumber + 1)
+      return
+    }
+
+    if (!isPracticing) {
+      setStatus(`已选择下一题方式：${getNextQuestionModeLabel(nextMode)}`)
     }
   }
 
@@ -90,26 +212,67 @@ export function IntervalTrainerPage() {
       return
     }
 
+    const isCorrect = selected === correctAnswer
     const nextAnswers = {
       ...answers,
       [group]: {
         selected,
-        isCorrect: selected === correctAnswer,
+        isCorrect,
       },
     }
     setAnswers(nextAnswers)
 
     const answeredCount = Object.keys(nextAnswers).length
-    if (answeredCount === ANSWER_GROUPS.length) {
-      setStatus('本题完成，正在进入下一题')
-      nextTimerRef.current = window.setTimeout(() => {
-        if (isPracticing) {
-          loadNextExercise(clef, questionNumber + 1)
+    setPracticeStats((currentStats) => {
+      const nextStats = {
+        ...currentStats,
+        answeredItems: currentStats.answeredItems + 1,
+        correctItems: currentStats.correctItems + (isCorrect ? 1 : 0),
+      }
+
+      if (answeredCount === ANSWER_GROUPS.length) {
+        const isQuestionCorrect = ANSWER_GROUPS.every(({ key }) => nextAnswers[key]?.isCorrect)
+        return {
+          ...nextStats,
+          completedQuestions: currentStats.completedQuestions + 1,
+          streak: isQuestionCorrect ? currentStats.streak + 1 : 0,
         }
-      }, 700)
+      }
+
+      return nextStats
+    })
+
+    if (answeredCount === ANSWER_GROUPS.length) {
+      scheduleNextQuestion(nextQuestionMode, questionNumber + 1)
     } else {
       setStatus(`已完成 ${answeredCount} / ${ANSWER_GROUPS.length} 项判断`)
     }
+  }
+
+  function scheduleNextQuestion(mode: NextQuestionMode, nextQuestionNumber: number) {
+    clearNextTimer()
+
+    if (mode === 'manual') {
+      setStatus('本题完成，可查看答案，点击“下一题”继续')
+      return
+    }
+
+    const delayMs = NEXT_QUESTION_DELAYS[mode]
+    const nextStatus = mode === 'delayed' ? '本题完成，可查看答案，3 秒后进入下一题' : '本题完成，正在进入下一题'
+    setStatus(nextStatus)
+    nextTimerRef.current = window.setTimeout(() => {
+      if (isPracticing) {
+        loadNextExercise(clef, difficulty, nextQuestionNumber)
+      }
+    }, delayMs)
+  }
+
+  function handleManualNextExercise() {
+    if (!canAdvanceManually) {
+      return
+    }
+
+    loadNextExercise(clef, difficulty, questionNumber + 1)
   }
 
   function clearNextTimer() {
@@ -119,46 +282,101 @@ export function IntervalTrainerPage() {
     }
   }
 
+  function createPlaybackToken(): number {
+    playbackTokenRef.current += 1
+    return playbackTokenRef.current
+  }
+
+  function isCurrentPlayback(token: number): boolean {
+    return playbackTokenRef.current === token
+  }
+
   return (
     <section className="module-panel" aria-labelledby="interval-trainer-title">
-      <header className="module-header compact">
+      <header className="module-header interval-header">
         <div>
           <p className="module-kicker">五线谱 · 两音题</p>
           <h1 id="interval-trainer-title">Interval Trainer：音符与音程判断</h1>
-          <p>程序生成两个音符的五线谱题目，分别判断第一个音、第二个音以及两个音之间的音程关系。</p>
         </div>
+        <div className="stats-grid" aria-label="五线谱练习统计">
+          <StatTile value={practiceStats.completedQuestions} label="完成题" />
+          <StatTile value={currentQuestionProgress} label="本题" />
+          <StatTile value={`${accuracy}%`} label="正确率" />
+          <StatTile value={practiceStats.streak} label="连对" />
+        </div>
+        <p className="module-summary">程序生成两个音符的五线谱题目，分别判断第一个音、第二个音以及两个音之间的音程关系。</p>
       </header>
 
-      <div className="interval-toolbar">
-        <fieldset className="segmented-field">
-          <legend>谱号</legend>
-          <div className="segmented-control">
-            {Object.entries(STAFF_CLEF_LABELS).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                className={clef === key ? 'is-active' : ''}
-                aria-pressed={clef === key}
-                onClick={() => handleClefChange(key as StaffClefName)}
+      <div className="interval-control-panel">
+        <div className="interval-toolbar">
+          <div className="compact-select-grid" aria-label="五线谱练习设置">
+            <label className="compact-select-field">
+              <span>谱号</span>
+              <select value={clef} disabled={isPracticing} onChange={(event) => handleClefChange(event.currentTarget.value as StaffClefName)}>
+                {Object.entries(STAFF_CLEF_LABELS).map(([key, label]) => (
+                  <option key={key} value={key}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="compact-select-field">
+              <span>难度</span>
+              <select
+                value={difficulty}
+                disabled={isPracticing}
+                onChange={(event) => handleDifficultyChange(event.currentTarget.value as StaffDifficultyId)}
               >
-                {label}
-              </button>
-            ))}
+                {STAFF_DIFFICULTY_LEVELS.map((level) => (
+                  <option key={level.id} value={level.id}>
+                    {level.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="compact-select-field">
+              <span>下一题</span>
+              <select value={nextQuestionMode} onChange={(event) => handleNextQuestionModeChange(event.currentTarget.value as NextQuestionMode)}>
+                {NEXT_QUESTION_MODES.map((mode) => (
+                  <option key={mode.id} value={mode.id}>
+                    {mode.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
-        </fieldset>
 
-        <div className="toolbar compact-toolbar" aria-label="五线谱练习控制">
-          <button type="button" className="primary-action" disabled={isPracticing} onClick={startPractice}>
-            开始游戏
-          </button>
-          <button type="button" className="secondary-action" disabled={!isPracticing} onClick={stopPractice}>
-            游戏结束
-          </button>
+          <div className="toolbar compact-toolbar" aria-label="五线谱练习控制">
+            <label className="switch-field">
+              <input type="checkbox" checked={autoPlayNotes} onChange={(event) => handleAutoPlayChange(event.currentTarget.checked)} />
+              <span>自动播放</span>
+            </label>
+            <button type="button" className="primary-action" disabled={isPracticing} onClick={startPractice}>
+              开始游戏
+            </button>
+            <button type="button" className="secondary-action" disabled={!exercise || isPlayingNotes} onClick={() => void handlePlayExerciseNotes()}>
+              {isPlayingNotes ? '播放中' : '播放两音'}
+            </button>
+            <button type="button" className="secondary-action" disabled={!canAdvanceManually} onClick={handleManualNextExercise}>
+              下一题
+            </button>
+            <button type="button" className="secondary-action" disabled={!isPracticing} onClick={stopPractice}>
+              游戏结束
+            </button>
+          </div>
         </div>
-      </div>
 
-      <div className="status-line tone-neutral" role="status" aria-live="polite">
-        {status}
+        <div className="interval-context">
+          <p className="difficulty-note" aria-label="当前难度约束说明">
+            <strong>{currentDifficulty.label}</strong>
+            <span>{currentDifficulty.summary}</span>
+          </p>
+          <div className="status-line tone-neutral" role="status" aria-live="polite">
+            {status}
+          </div>
+        </div>
       </div>
 
       <div className="staff-stage">
@@ -185,6 +403,32 @@ export function IntervalTrainerPage() {
         ))}
       </div>
     </section>
+  )
+}
+
+function createEmptyPracticeStats(): PracticeStats {
+  return {
+    completedQuestions: 0,
+    answeredItems: 0,
+    correctItems: 0,
+    streak: 0,
+  }
+}
+
+function getDifficultyLabel(difficulty: StaffDifficultyId): string {
+  return STAFF_DIFFICULTY_LEVELS.find((level) => level.id === difficulty)?.label ?? difficulty
+}
+
+function getNextQuestionModeLabel(mode: NextQuestionMode): string {
+  return NEXT_QUESTION_MODES.find((option) => option.id === mode)?.label ?? mode
+}
+
+function StatTile({ value, label }: { value: number | string; label: string }) {
+  return (
+    <div className="stat-tile" aria-label={`${label} ${value}`}>
+      <strong>{value}</strong>
+      <span>{label}</span>
+    </div>
   )
 }
 

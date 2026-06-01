@@ -1,13 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
-import { playPianoSample, preloadPianoSamples, stopPianoSample } from '../../audio/pianoSamples'
+import {
+  DEFAULT_EAR_TRAINING_INSTRUMENT_ID,
+  EAR_TRAINING_INSTRUMENTS,
+  playEarTrainingSound,
+  preloadEarTrainingSounds,
+  stopEarTrainingSound,
+  type EarTrainingInstrumentId,
+} from '../../audio/earTrainingPlayback'
 import {
   createInitialEarTrainingStats,
-  EAR_TRAINING_NOTES,
+  DEFAULT_EAR_TRAINING_PITCH_RANGE_ID,
+  EAR_TRAINING_PITCH_RANGES,
   getEarTrainingAccuracy,
+  getEarTrainingPitchRange,
   pickEarTrainingNote,
   recordEarTrainingAnswer,
   type EarTrainingNote,
   type EarTrainingNoteName,
+  type EarTrainingPitchRangeId,
 } from '../../domain/earTraining'
 
 type EarTrainingMode = 'idle' | 'playing' | 'guessing' | 'feedback'
@@ -25,16 +35,21 @@ export function EarTrainingPage() {
   const [status, setStatus] = useState('准备开始')
   const [statusTone, setStatusTone] = useState<StatusTone>('neutral')
   const [stats, setStats] = useState(createInitialEarTrainingStats)
+  const [pitchRangeId, setPitchRangeId] = useState<EarTrainingPitchRangeId>(DEFAULT_EAR_TRAINING_PITCH_RANGE_ID)
+  const [instrumentId, setInstrumentId] = useState<EarTrainingInstrumentId>(DEFAULT_EAR_TRAINING_INSTRUMENT_ID)
   const roundTokenRef = useRef(0)
   const feedbackTimerRef = useRef<number | null>(null)
   const mountedRef = useRef(true)
+  const activePitchRange = getEarTrainingPitchRange(pitchRangeId)
+  const activeInstrument = EAR_TRAINING_INSTRUMENTS.find((instrument) => instrument.id === instrumentId) ?? EAR_TRAINING_INSTRUMENTS[0]
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       const noteName = event.key.toUpperCase() as EarTrainingNoteName
+      const matchingNote = activePitchRange.notes.find((note) => note.keyboardKey === noteName || note.name.toUpperCase() === noteName)
 
-      if (mode === 'guessing' && EAR_TRAINING_NOTES.some((note) => note.name === noteName)) {
-        submitAnswer(noteName)
+      if (mode === 'guessing' && matchingNote) {
+        submitAnswer(matchingNote.name)
       }
     }
 
@@ -44,15 +59,18 @@ export function EarTrainingPage() {
 
   useEffect(() => {
     mountedRef.current = true
-    preloadPianoSamples()
 
     return () => {
       mountedRef.current = false
       clearFeedbackTimer()
-      stopPianoSample()
+      stopEarTrainingSound()
       createRoundToken()
     }
   }, [])
+
+  useEffect(() => {
+    preloadEarTrainingSounds(instrumentId)
+  }, [instrumentId])
 
   async function startRound() {
     if (mode === 'playing') {
@@ -60,25 +78,27 @@ export function EarTrainingPage() {
     }
 
     const token = createRoundToken()
+    const roundNotes = activePitchRange.notes
+    const roundInstrumentId = instrumentId
     clearFeedbackTimer()
     setSelectedNote(null)
     setTargetNote(null)
     setActiveNote(null)
     setStatusTone('neutral')
     setMode('playing')
-    setStatus('正在播放参考音阶')
+    setStatus('正在播放参考音域')
 
     try {
-      await playScale(token)
+      await playPitchRange(token, roundNotes, roundInstrumentId)
 
       if (!isCurrentRound(token)) {
         return
       }
 
-      const nextTarget = pickEarTrainingNote()
+      const nextTarget = pickEarTrainingNote(Math.random, roundNotes)
       setTargetNote(nextTarget)
       setStatus('正在播放随机单音')
-      await playNote(nextTarget, token, false, TARGET_NOTE_MS)
+      await playNote(nextTarget, token, false, TARGET_NOTE_MS, roundInstrumentId)
 
       if (!isCurrentRound(token)) {
         return
@@ -97,7 +117,7 @@ export function EarTrainingPage() {
     }
   }
 
-  async function replayScale() {
+  async function replayPitchRange() {
     if (mode === 'playing' || mode === 'feedback') {
       return
     }
@@ -106,10 +126,10 @@ export function EarTrainingPage() {
     const previousMode = mode
     setMode('playing')
     setStatusTone('neutral')
-    setStatus('正在重播参考音阶')
+    setStatus('正在重播参考音域')
 
     try {
-      await playScale(token)
+      await playPitchRange(token, activePitchRange.notes, instrumentId)
 
       if (!isCurrentRound(token)) {
         return
@@ -139,7 +159,7 @@ export function EarTrainingPage() {
     setStatus('正在重播单音')
 
     try {
-      await playNote(targetNote, token, false, TARGET_NOTE_MS)
+      await playNote(targetNote, token, false, TARGET_NOTE_MS, instrumentId)
 
       if (!isCurrentRound(token)) {
         return
@@ -181,7 +201,7 @@ export function EarTrainingPage() {
   function stopPractice() {
     createRoundToken()
     clearFeedbackTimer()
-    stopPianoSample()
+    stopEarTrainingSound()
     setMode('idle')
     setTargetNote(null)
     setActiveNote(null)
@@ -194,13 +214,25 @@ export function EarTrainingPage() {
     setStats(createInitialEarTrainingStats())
   }
 
-  async function playScale(token: number) {
-    for (const note of EAR_TRAINING_NOTES) {
+  function handlePitchRangeChange(nextRangeId: EarTrainingPitchRangeId) {
+    setPitchRangeId(nextRangeId)
+    setStatusTone('neutral')
+    setStatus(`已选择 ${getEarTrainingPitchRange(nextRangeId).label}`)
+  }
+
+  function handleInstrumentChange(nextInstrumentId: EarTrainingInstrumentId) {
+    setInstrumentId(nextInstrumentId)
+    setStatusTone('neutral')
+    setStatus(`已选择 ${EAR_TRAINING_INSTRUMENTS.find((instrument) => instrument.id === nextInstrumentId)?.label ?? '音色'}`)
+  }
+
+  async function playPitchRange(token: number, notes: readonly EarTrainingNote[], selectedInstrumentId: EarTrainingInstrumentId) {
+    for (const note of notes) {
       if (!isCurrentRound(token)) {
         break
       }
 
-      await playNote(note, token, true, SCALE_NOTE_MS)
+      await playNote(note, token, true, SCALE_NOTE_MS, selectedInstrumentId)
     }
 
     if (isCurrentRound(token)) {
@@ -208,12 +240,18 @@ export function EarTrainingPage() {
     }
   }
 
-  async function playNote(note: EarTrainingNote, token: number, highlight: boolean, durationMs: number) {
+  async function playNote(
+    note: EarTrainingNote,
+    token: number,
+    highlight: boolean,
+    durationMs: number,
+    selectedInstrumentId: EarTrainingInstrumentId,
+  ) {
     if (highlight) {
       setActiveNote(note.name)
     }
 
-    await playPianoSample(note.name, durationMs)
+    await playEarTrainingSound(note, selectedInstrumentId, durationMs)
 
     if (highlight && isCurrentRound(token)) {
       setActiveNote(null)
@@ -245,9 +283,11 @@ export function EarTrainingPage() {
     <section className="module-panel" aria-labelledby="ear-training-title">
       <header className="module-header">
         <div>
-          <p className="module-kicker">C 大调 · 小字一组</p>
+          <p className="module-kicker">
+            {activePitchRange.kicker} · {activeInstrument.label}
+          </p>
           <h1 id="ear-training-title">Ear Training：单音听辨</h1>
-          <p>先播放 C 到 B 的参考音阶，再播放一个随机单音。通过音名按钮判断听到的音高。</p>
+          <p>先播放所选音域，再播放一个随机单音。通过音名按钮判断听到的音高。</p>
         </div>
         <div className="stats-grid" aria-label="当前练习统计">
           <StatTile value={stats.total} label="总题数" />
@@ -257,12 +297,50 @@ export function EarTrainingPage() {
         </div>
       </header>
 
+      <div className="settings-grid" aria-label="单音听辨设置">
+        <label className="select-field">
+          <span>音色</span>
+          <select
+            value={instrumentId}
+            disabled={!isIdle}
+            onChange={(event) => handleInstrumentChange(event.target.value as EarTrainingInstrumentId)}
+          >
+            {EAR_TRAINING_INSTRUMENTS.map((instrument) => (
+              <option
+                key={instrument.id}
+                value={instrument.id}
+              >
+                {instrument.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="select-field">
+          <span>音域</span>
+          <select
+            value={pitchRangeId}
+            disabled={!isIdle}
+            onChange={(event) => handlePitchRangeChange(event.target.value as EarTrainingPitchRangeId)}
+          >
+            {EAR_TRAINING_PITCH_RANGES.map((range) => (
+              <option
+                key={range.id}
+                value={range.id}
+              >
+                {range.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
       <div className={`status-line tone-${statusTone}`} role="status" aria-live="polite">
         {status}
       </div>
 
-      <div className="note-answer-grid" aria-label="参考音阶和选择音名">
-        {EAR_TRAINING_NOTES.map((note) => {
+      <div className="note-answer-grid" aria-label="参考音域和选择音名">
+        {activePitchRange.notes.map((note) => {
           const isActive = activeNote === note.name
           const isCorrectAnswer = mode === 'feedback' && targetNote?.name === note.name
           const isWrongSelection = mode === 'feedback' && selectedNote === note.name && selectedNote !== targetNote?.name
@@ -285,8 +363,8 @@ export function EarTrainingPage() {
         <button type="button" className="primary-action" disabled={!isIdle} onClick={() => void startRound()}>
           {isIdle ? '开始' : '练习中'}
         </button>
-        <button type="button" className="secondary-action" disabled={isPlaying || mode === 'feedback'} onClick={() => void replayScale()}>
-          重播音阶
+        <button type="button" className="secondary-action" disabled={isPlaying || mode === 'feedback'} onClick={() => void replayPitchRange()}>
+          重播音域
         </button>
         <button type="button" className="secondary-action" disabled={!isGuessing || !targetNote} onClick={() => void replayTarget()}>
           重播单音

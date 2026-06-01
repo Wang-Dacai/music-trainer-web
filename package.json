@@ -2,6 +2,7 @@
   "name": "music-trainer-web",
   "private": true,
   "version": "0.1.0",
+  "description": "用于单音听辨和五线谱音符 / 音程练习的浏览器音乐训练工具。",
   "type": "module",
   "scripts": {
     "dev": "vite",
