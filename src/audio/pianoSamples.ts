@@ -1,6 +1,8 @@
-import type { EarTrainingNoteName } from '../domain/earTraining'
+import type { NoteStep } from '../domain/pitch'
 
-const SAMPLE_URL_BY_NOTE: Record<EarTrainingNoteName, string> = {
+type PianoSampleNoteName = NoteStep
+
+const SAMPLE_URL_BY_NOTE: Record<PianoSampleNoteName, string> = {
   C: '/audio/ear-training/c4.mp3',
   D: '/audio/ear-training/d4.mp3',
   E: '/audio/ear-training/e4.mp3',
@@ -15,18 +17,18 @@ interface ActivePlayback {
   id: number
 }
 
-const audioCache = new Map<EarTrainingNoteName, HTMLAudioElement>()
+const audioCache = new Map<PianoSampleNoteName, HTMLAudioElement>()
 
 let activePlayback: ActivePlayback | null = null
 let playbackId = 0
 
 export function preloadPianoSamples(): void {
-  for (const noteName of Object.keys(SAMPLE_URL_BY_NOTE) as EarTrainingNoteName[]) {
+  for (const noteName of Object.keys(SAMPLE_URL_BY_NOTE) as PianoSampleNoteName[]) {
     getAudio(noteName)
   }
 }
 
-export async function playPianoSample(noteName: EarTrainingNoteName, durationMs: number): Promise<void> {
+export async function playPianoSample(noteName: PianoSampleNoteName, durationMs: number): Promise<void> {
   stopPianoSample()
 
   const audio = getAudio(noteName)
@@ -54,7 +56,7 @@ export function stopPianoSample(): void {
   activePlayback = null
 }
 
-function getAudio(noteName: EarTrainingNoteName): HTMLAudioElement {
+function getAudio(noteName: PianoSampleNoteName): HTMLAudioElement {
   const cached = audioCache.get(noteName)
 
   if (cached) {

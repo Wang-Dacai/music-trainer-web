@@ -10,6 +10,7 @@ import {
   type StaffDifficultyId,
   type StaffIntervalExercise,
 } from '../../domain/staffTrainer'
+import type { PracticeSessionInput } from '../../domain/practiceHistory'
 import StaffNotation from '../components/StaffNotation'
 
 interface AnswerState {
@@ -19,12 +20,16 @@ interface AnswerState {
 
 interface PracticeStats {
   completedQuestions: number
-  answeredItems: number
-  correctItems: number
+  correctQuestions: number
   streak: number
 }
 
 type NextQuestionMode = 'instant' | 'delayed' | 'manual'
+
+interface IntervalTrainerPageProps {
+  isActive?: boolean
+  onSessionComplete?: (session: PracticeSessionInput) => void
+}
 
 const ANSWER_GROUPS: Array<{
   key: StaffAnswerGroup
@@ -47,7 +52,7 @@ const NEXT_QUESTION_DELAYS: Record<Exclude<NextQuestionMode, 'manual'>, number> 
   delayed: 3000,
 }
 
-export function IntervalTrainerPage() {
+export function IntervalTrainerPage({ isActive = true, onSessionComplete }: IntervalTrainerPageProps) {
   const [clef, setClef] = useState<StaffClefName>('treble')
   const [difficulty, setDifficulty] = useState<StaffDifficultyId>(DEFAULT_STAFF_DIFFICULTY_ID)
   const [nextQuestionMode, setNextQuestionMode] = useState<NextQuestionMode>('instant')
@@ -62,12 +67,14 @@ export function IntervalTrainerPage() {
   const nextTimerRef = useRef<number | null>(null)
   const playbackTokenRef = useRef(0)
   const statusRef = useRef(status)
+  const sessionStartStatsRef = useRef(createEmptyPracticeStats())
   const currentDifficulty = STAFF_DIFFICULTY_LEVELS.find((level) => level.id === difficulty) ?? STAFF_DIFFICULTY_LEVELS[0]
   const answeredCount = Object.keys(answers).length
   const isQuestionComplete = answeredCount === ANSWER_GROUPS.length
   const currentQuestionProgress = `${answeredCount}/${ANSWER_GROUPS.length}`
   const canAdvanceManually = isPracticing && Boolean(exercise) && isQuestionComplete && nextQuestionMode === 'manual'
-  const accuracy = practiceStats.answeredItems > 0 ? Math.round((practiceStats.correctItems / practiceStats.answeredItems) * 100) : 0
+  const accuracy =
+    practiceStats.completedQuestions > 0 ? Math.round((practiceStats.correctQuestions / practiceStats.completedQuestions) * 100) : 0
 
   useEffect(() => {
     statusRef.current = status
@@ -83,21 +90,45 @@ export function IntervalTrainerPage() {
     }
   }, [])
 
-  function startPractice() {
+  useEffect(() => {
+    if (isActive) {
+      if (isPracticing && exercise && isQuestionComplete) {
+        scheduleNextQuestion(nextQuestionMode, questionNumber + 1)
+      } else if (isPracticing && exercise && statusRef.current === '已暂停') {
+        setStatus(`第 ${questionNumber} 题：观察谱面并完成三项判断`)
+      }
+
+      return
+    }
+
     clearNextTimer()
-    setPracticeStats(createEmptyPracticeStats())
+    createPlaybackToken()
+    stopStaffPlayback()
+    setIsPlayingNotes(false)
+    setStatus((currentStatus) => (currentStatus.startsWith('正在') ? '已暂停' : currentStatus))
+  }, [isActive])
+
+  function startPractice() {
+    const nextStats = createEmptyPracticeStats()
+    clearNextTimer()
+    setPracticeStats(nextStats)
+    sessionStartStatsRef.current = nextStats
     setIsPracticing(true)
     setQuestionNumber(1)
     loadNextExercise(clef, difficulty, 1)
   }
 
   function stopPractice() {
+    recordCurrentSession()
+    const nextStats = createEmptyPracticeStats()
     clearNextTimer()
     setIsPracticing(false)
     setExercise(null)
     setAnswers({})
     setIsPlayingNotes(false)
     setQuestionNumber(0)
+    setPracticeStats(nextStats)
+    sessionStartStatsRef.current = nextStats
     createPlaybackToken()
     stopStaffPlayback()
     setStatus('已停止')
@@ -224,22 +255,17 @@ export function IntervalTrainerPage() {
 
     const answeredCount = Object.keys(nextAnswers).length
     setPracticeStats((currentStats) => {
-      const nextStats = {
-        ...currentStats,
-        answeredItems: currentStats.answeredItems + 1,
-        correctItems: currentStats.correctItems + (isCorrect ? 1 : 0),
-      }
-
       if (answeredCount === ANSWER_GROUPS.length) {
         const isQuestionCorrect = ANSWER_GROUPS.every(({ key }) => nextAnswers[key]?.isCorrect)
         return {
-          ...nextStats,
+          ...currentStats,
           completedQuestions: currentStats.completedQuestions + 1,
+          correctQuestions: currentStats.correctQuestions + (isQuestionCorrect ? 1 : 0),
           streak: isQuestionCorrect ? currentStats.streak + 1 : 0,
         }
       }
 
-      return nextStats
+      return currentStats
     })
 
     if (answeredCount === ANSWER_GROUPS.length) {
@@ -261,7 +287,7 @@ export function IntervalTrainerPage() {
     const nextStatus = mode === 'delayed' ? '本题完成，可查看答案，3 秒后进入下一题' : '本题完成，正在进入下一题'
     setStatus(nextStatus)
     nextTimerRef.current = window.setTimeout(() => {
-      if (isPracticing) {
+      if (isActive && isPracticing) {
         loadNextExercise(clef, difficulty, nextQuestionNumber)
       }
     }, delayMs)
@@ -273,6 +299,25 @@ export function IntervalTrainerPage() {
     }
 
     loadNextExercise(clef, difficulty, questionNumber + 1)
+  }
+
+  function recordCurrentSession() {
+    const sessionStartStats = sessionStartStatsRef.current
+    const completedItems = practiceStats.completedQuestions - sessionStartStats.completedQuestions
+
+    if (completedItems <= 0) {
+      return
+    }
+
+    const correctItems = practiceStats.correctQuestions - sessionStartStats.correctQuestions
+    onSessionComplete?.({
+      module: 'interval-trainer',
+      completedItems,
+      correctItems,
+      detail: `${STAFF_CLEF_LABELS[clef]}谱号 · ${currentDifficulty.label}`,
+      streak: practiceStats.streak,
+    })
+    sessionStartStatsRef.current = practiceStats
   }
 
   function clearNextTimer() {
@@ -354,7 +399,7 @@ export function IntervalTrainerPage() {
               <span>自动播放</span>
             </label>
             <button type="button" className="primary-action" disabled={isPracticing} onClick={startPractice}>
-              开始游戏
+              开始练习
             </button>
             <button type="button" className="secondary-action" disabled={!exercise || isPlayingNotes} onClick={() => void handlePlayExerciseNotes()}>
               {isPlayingNotes ? '播放中' : '播放两音'}
@@ -363,7 +408,7 @@ export function IntervalTrainerPage() {
               下一题
             </button>
             <button type="button" className="secondary-action" disabled={!isPracticing} onClick={stopPractice}>
-              游戏结束
+              结束练习
             </button>
           </div>
         </div>
@@ -383,7 +428,7 @@ export function IntervalTrainerPage() {
         {exercise ? (
           <StaffNotation clef={exercise.clef} firstPitch={exercise.firstPitch} secondPitch={exercise.secondPitch} />
         ) : (
-          <div className="staff-placeholder">点击“开始游戏”生成五线谱题目</div>
+          <div className="staff-placeholder">点击“开始练习”生成五线谱题目</div>
         )}
       </div>
 
@@ -409,8 +454,7 @@ export function IntervalTrainerPage() {
 function createEmptyPracticeStats(): PracticeStats {
   return {
     completedQuestions: 0,
-    answeredItems: 0,
-    correctItems: 0,
+    correctQuestions: 0,
     streak: 0,
   }
 }

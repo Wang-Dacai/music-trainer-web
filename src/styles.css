@@ -120,6 +120,73 @@ p {
   line-height: 1.35;
 }
 
+.dashboard-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-top: 18px;
+  padding: 16px;
+  background: var(--surface);
+}
+
+.dashboard-header {
+  margin-bottom: 14px;
+}
+
+.dashboard-header h2 {
+  margin-bottom: 0;
+  font-size: clamp(1.18rem, 2.2vw, 1.55rem);
+  line-height: 1.18;
+}
+
+.recent-session-list {
+  display: grid;
+  gap: 8px;
+}
+
+.recent-session-item,
+.recent-session-empty {
+  min-height: 44px;
+  display: grid;
+  grid-template-columns: minmax(90px, 0.46fr) minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 12px;
+  background: var(--surface);
+}
+
+.recent-session-item strong {
+  font-size: 0.92rem;
+}
+
+.recent-session-item span,
+.recent-session-empty {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.recent-session-empty {
+  grid-template-columns: 1fr;
+}
+
+.session-delete-button {
+  min-height: 34px;
+  border: 1px solid rgba(179, 38, 30, 0.32);
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--error);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.session-delete-button:hover {
+  background: var(--error-soft);
+}
+
 .module-panel {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -251,10 +318,16 @@ p {
 
 .note-button {
   min-height: 68px;
+  display: grid;
+  place-items: center;
+  padding: 10px 8px;
   color: var(--ink);
   background: var(--surface);
-  font-size: 1.2rem;
+  font-size: 1.08rem;
   font-weight: 800;
+  line-height: 1.22;
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .note-button.is-active {
@@ -364,7 +437,7 @@ p {
 
 .settings-grid {
   display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 18px;
 }
@@ -399,6 +472,22 @@ p {
 .select-field select:focus-visible {
   outline: none;
   box-shadow: 0 0 0 4px rgba(36, 87, 197, 0.18);
+}
+
+.ear-label-mode-field {
+  min-width: 0;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.ear-label-mode-field legend {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.ear-label-mode-control {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .interval-control-panel {
@@ -687,6 +776,11 @@ p {
   .segmented-control.option-set,
   .choice-grid.four-choice {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .recent-session-item {
+    grid-template-columns: 1fr;
+    gap: 3px;
   }
 
   .note-answer-grid .note-button:last-child {

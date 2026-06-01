@@ -85,7 +85,7 @@ describe('IntervalTrainerPage', () => {
     const user = userEvent.setup()
 
     render(<IntervalTrainerPage />)
-    await user.click(screen.getByRole('button', { name: '开始游戏' }))
+    await user.click(screen.getByRole('button', { name: '开始练习' }))
 
     expect(generateStaffIntervalExercise).toHaveBeenCalledWith({ clef: 'treble', difficulty: 'beginner' })
     expect(playStaffExerciseNotes).toHaveBeenCalledWith(exerciseOne.firstPitch, exerciseOne.secondPitch)
@@ -101,18 +101,18 @@ describe('IntervalTrainerPage', () => {
     expect(screen.getByRole('status')).toHaveTextContent('已完成 1 / 3 项判断')
     expect(within(screen.getByRole('group', { name: '第一个音' })).getByRole('button', { name: 'C4' })).toBeDisabled()
     expect(screen.getByLabelText('本题 1/3')).toBeInTheDocument()
-    expect(screen.getByLabelText('正确率 100%')).toBeInTheDocument()
+    expect(screen.getByLabelText('正确率 0%')).toBeInTheDocument()
 
     await user.click(within(screen.getByRole('group', { name: '第二个音' })).getByRole('button', { name: 'F4' }))
     expect(within(screen.getByRole('group', { name: '第二个音' })).getByRole('button', { name: 'E4' })).toHaveClass('is-correct')
     expect(within(screen.getByRole('group', { name: '第二个音' })).getByRole('button', { name: 'F4' })).toHaveClass('is-incorrect')
     expect(screen.getByLabelText('本题 2/3')).toBeInTheDocument()
-    expect(screen.getByLabelText('正确率 50%')).toBeInTheDocument()
+    expect(screen.getByLabelText('正确率 0%')).toBeInTheDocument()
 
     await user.click(within(screen.getByRole('group', { name: '音程关系' })).getByRole('button', { name: '大三度' }))
     expect(screen.getByRole('status')).toHaveTextContent('本题完成，正在进入下一题')
     expect(screen.getByLabelText('完成题 1')).toBeInTheDocument()
-    expect(screen.getByLabelText('正确率 67%')).toBeInTheDocument()
+    expect(screen.getByLabelText('正确率 0%')).toBeInTheDocument()
     expect(screen.getByLabelText('连对 0')).toBeInTheDocument()
 
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('第 2 题'), { timeout: 1200 })
@@ -125,7 +125,7 @@ describe('IntervalTrainerPage', () => {
 
     render(<IntervalTrainerPage />)
     await user.selectOptions(screen.getByRole('combobox', { name: '下一题' }), 'delayed')
-    await user.click(screen.getByRole('button', { name: '开始游戏' }))
+    await user.click(screen.getByRole('button', { name: '开始练习' }))
     await user.click(within(screen.getByRole('group', { name: '第一个音' })).getByRole('button', { name: 'C4' }))
     await user.click(within(screen.getByRole('group', { name: '第二个音' })).getByRole('button', { name: 'E4' }))
     await user.click(within(screen.getByRole('group', { name: '音程关系' })).getByRole('button', { name: '大三度' }))
@@ -143,7 +143,7 @@ describe('IntervalTrainerPage', () => {
     await user.selectOptions(screen.getByRole('combobox', { name: '下一题' }), 'manual')
     expect(screen.getByRole('status')).toHaveTextContent('已选择下一题方式：手动')
 
-    await user.click(screen.getByRole('button', { name: '开始游戏' }))
+    await user.click(screen.getByRole('button', { name: '开始练习' }))
     await user.click(within(screen.getByRole('group', { name: '第一个音' })).getByRole('button', { name: 'C4' }))
     await user.click(within(screen.getByRole('group', { name: '第二个音' })).getByRole('button', { name: 'F4' }))
     await user.click(within(screen.getByRole('group', { name: '音程关系' })).getByRole('button', { name: '大三度' }))
@@ -165,12 +165,76 @@ describe('IntervalTrainerPage', () => {
     await user.selectOptions(screen.getByRole('combobox', { name: '谱号' }), 'bass')
     expect(screen.getByRole('status')).toHaveTextContent('已选择低音谱号')
 
-    await user.click(screen.getByRole('button', { name: '开始游戏' }))
+    await user.click(screen.getByRole('button', { name: '开始练习' }))
     expect(generateStaffIntervalExercise).toHaveBeenCalledWith({ clef: 'bass', difficulty: 'beginner' })
 
-    await user.click(screen.getByRole('button', { name: '游戏结束' }))
+    await user.click(screen.getByRole('button', { name: '结束练习' }))
     expect(screen.getByRole('status')).toHaveTextContent('已停止')
-    expect(screen.getByText('点击“开始游戏”生成五线谱题目')).toBeInTheDocument()
+    expect(screen.getByText('点击“开始练习”生成五线谱题目')).toBeInTheDocument()
+    expect(screen.getByLabelText('完成题 0')).toBeInTheDocument()
+    expect(screen.getByLabelText('正确率 0%')).toBeInTheDocument()
+    expect(screen.getByLabelText('连对 0')).toBeInTheDocument()
+  })
+
+  it('结束练习时记录本次五线谱练习结果', async () => {
+    const user = userEvent.setup()
+    const onSessionComplete = vi.fn()
+
+    render(<IntervalTrainerPage onSessionComplete={onSessionComplete} />)
+    await user.click(screen.getByRole('button', { name: '开始练习' }))
+    await user.click(within(screen.getByRole('group', { name: '第一个音' })).getByRole('button', { name: 'C4' }))
+    await user.click(within(screen.getByRole('group', { name: '第二个音' })).getByRole('button', { name: 'E4' }))
+    await user.click(within(screen.getByRole('group', { name: '音程关系' })).getByRole('button', { name: '大三度' }))
+    await user.click(screen.getByRole('button', { name: '结束练习' }))
+
+    expect(onSessionComplete).toHaveBeenCalledWith({
+      module: 'interval-trainer',
+      completedItems: 1,
+      correctItems: 1,
+      detail: '高音谱号 · 入门',
+      streak: 1,
+    })
+    expect(screen.getByLabelText('完成题 0')).toBeInTheDocument()
+    expect(screen.getByLabelText('正确率 0%')).toBeInTheDocument()
+    expect(screen.getByLabelText('连对 0')).toBeInTheDocument()
+  })
+
+  it('切换离开时不记录本次五线谱练习结果', async () => {
+    const user = userEvent.setup()
+    const onSessionComplete = vi.fn()
+
+    const { rerender } = render(<IntervalTrainerPage isActive onSessionComplete={onSessionComplete} />)
+    await user.click(screen.getByRole('button', { name: '开始练习' }))
+    await user.click(within(screen.getByRole('group', { name: '第一个音' })).getByRole('button', { name: 'C4' }))
+    await user.click(within(screen.getByRole('group', { name: '第二个音' })).getByRole('button', { name: 'E4' }))
+    await user.click(within(screen.getByRole('group', { name: '音程关系' })).getByRole('button', { name: '大三度' }))
+
+    rerender(<IntervalTrainerPage isActive={false} onSessionComplete={onSessionComplete} />)
+
+    expect(onSessionComplete).not.toHaveBeenCalled()
+
+    rerender(<IntervalTrainerPage isActive onSessionComplete={onSessionComplete} />)
+    await user.click(screen.getByRole('button', { name: '结束练习' }))
+
+    expect(onSessionComplete).toHaveBeenCalledWith({
+      module: 'interval-trainer',
+      completedItems: 1,
+      correctItems: 1,
+      detail: '高音谱号 · 入门',
+      streak: 1,
+    })
+  })
+
+  it('未完成三项判断时不记录本次五线谱练习结果', async () => {
+    const user = userEvent.setup()
+    const onSessionComplete = vi.fn()
+
+    render(<IntervalTrainerPage onSessionComplete={onSessionComplete} />)
+    await user.click(screen.getByRole('button', { name: '开始练习' }))
+    await user.click(within(screen.getByRole('group', { name: '第一个音' })).getByRole('button', { name: 'C4' }))
+    await user.click(screen.getByRole('button', { name: '结束练习' }))
+
+    expect(onSessionComplete).not.toHaveBeenCalled()
   })
 
   it('未开始时可切换难度，并按所选难度生成题目', async () => {
@@ -180,7 +244,7 @@ describe('IntervalTrainerPage', () => {
     await user.selectOptions(screen.getByRole('combobox', { name: '难度' }), 'intermediate')
     expect(screen.getByRole('status')).toHaveTextContent('已选择进阶难度')
 
-    await user.click(screen.getByRole('button', { name: '开始游戏' }))
+    await user.click(screen.getByRole('button', { name: '开始练习' }))
     expect(generateStaffIntervalExercise).toHaveBeenCalledWith({ clef: 'treble', difficulty: 'intermediate' })
   })
 
@@ -199,7 +263,7 @@ describe('IntervalTrainerPage', () => {
     expect(screen.getByRole('status')).toHaveTextContent('已关闭自动播放')
     expect(screen.getByRole('button', { name: '播放两音' })).toBeDisabled()
 
-    await user.click(screen.getByRole('button', { name: '开始游戏' }))
+    await user.click(screen.getByRole('button', { name: '开始练习' }))
     expect(playStaffExerciseNotes).not.toHaveBeenCalled()
     await user.click(screen.getByRole('button', { name: '播放两音' }))
 
