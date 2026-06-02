@@ -23,7 +23,7 @@ vi.mock('./audio/staffPlayback', () => ({
 }))
 
 vi.mock('./ui/components/StaffNotation', () => ({
-  default: () => <div aria-label="五线谱题目">mock staff</div>,
+  default: ({ ariaLabel = '五线谱题目' }: { ariaLabel?: string }) => <div aria-label={ariaLabel}>mock staff</div>,
 }))
 
 describe('App', () => {
@@ -107,5 +107,28 @@ describe('App', () => {
 
     expect(screen.getByLabelText('五线谱题目')).toHaveTextContent('mock staff')
     expect(screen.getByRole('button', { name: '开始练习' })).toBeDisabled()
+  })
+
+  it('opens the guitar chord reference without creating practice records and keeps its browsing state', async () => {
+    const user = userEvent.setup()
+
+    render(<App />)
+    expect(screen.getByRole('button', { name: /Guitar Chords/ })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /Guitar Chords/ }))
+    await screen.findByRole('heading', { name: '吉他和弦识读' })
+    await user.type(screen.getByLabelText('搜索和弦名称'), 'Cmaj7')
+    await user.click(screen.getByRole('button', { name: /Cmaj7 C 大七和弦/ }))
+
+    const recordList = screen.getByLabelText('逐条练习记录')
+    expect(recordList).toHaveTextContent('还没有练习记录')
+    expect(screen.getByLabelText('五线谱信息')).toHaveTextContent('C4、E4、G4、B4')
+
+    await user.click(screen.getByRole('button', { name: /Ear Training/ }))
+    await user.click(screen.getByRole('button', { name: /Guitar Chords/ }))
+
+    expect(screen.getByLabelText('搜索和弦名称')).toHaveValue('Cmaj7')
+    expect(screen.getByRole('heading', { name: /Cmaj7 C 大七和弦/ })).toBeInTheDocument()
+    expect(recordList).toHaveTextContent('还没有练习记录')
   })
 })

@@ -11,9 +11,10 @@ import {
 } from './domain/practiceHistory'
 import EarTrainingPage from './ui/pages/EarTrainingPage'
 
-type ModuleKey = 'ear-training' | 'interval-trainer'
+type ModuleKey = 'ear-training' | 'interval-trainer' | 'guitar-chord-reading'
 
 const IntervalTrainerPage = lazy(() => import('./ui/pages/IntervalTrainerPage'))
+const GuitarChordReadingPage = lazy(() => import('./ui/pages/GuitarChordReadingPage'))
 
 const MODULES: Array<{
   key: ModuleKey
@@ -30,16 +31,26 @@ const MODULES: Array<{
     label: 'Interval Trainer',
     subtitle: '看五线谱并判断音符和音程',
   },
+  {
+    key: 'guitar-chord-reading',
+    label: 'Guitar Chords',
+    subtitle: '吉他和弦识读',
+  },
 ]
 
 function App() {
   const [activeModule, setActiveModule] = useState<ModuleKey>('ear-training')
   const [isIntervalTrainerMounted, setIsIntervalTrainerMounted] = useState(false)
+  const [isGuitarChordReadingMounted, setIsGuitarChordReadingMounted] = useState(false)
   const [practiceHistory, setPracticeHistory] = useState<PracticeHistory>(() => loadPracticeHistory())
 
   function handleSelectModule(module: ModuleKey) {
     if (module === 'interval-trainer') {
       setIsIntervalTrainerMounted(true)
+    }
+
+    if (module === 'guitar-chord-reading') {
+      setIsGuitarChordReadingMounted(true)
     }
 
     setActiveModule(module)
@@ -92,6 +103,14 @@ function App() {
         <div hidden={activeModule !== 'interval-trainer'}>
           <Suspense fallback={<section className="module-panel module-loading">正在加载五线谱练习...</section>}>
             <IntervalTrainerPage isActive={activeModule === 'interval-trainer'} onSessionComplete={handleSessionComplete} />
+          </Suspense>
+        </div>
+      )}
+
+      {(isGuitarChordReadingMounted || activeModule === 'guitar-chord-reading') && (
+        <div hidden={activeModule !== 'guitar-chord-reading'}>
+          <Suspense fallback={<section className="module-panel module-loading">正在加载吉他和弦识读...</section>}>
+            <GuitarChordReadingPage isActive={activeModule === 'guitar-chord-reading'} />
           </Suspense>
         </div>
       )}

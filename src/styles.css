@@ -88,7 +88,7 @@ p {
 
 .module-tabs {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 10px;
 }
 
@@ -737,6 +737,322 @@ p {
   background: var(--surface-muted);
 }
 
+.guitar-chord-header p {
+  max-width: 860px;
+}
+
+.chord-browser-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.38fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.chord-browser-sidebar,
+.chord-detail-panel,
+.chord-info-card,
+.staff-info-panel,
+.fingering-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.chord-browser-sidebar {
+  position: sticky;
+  top: 14px;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.chord-search-field {
+  display: grid;
+  gap: 8px;
+}
+
+.chord-search-field span {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.chord-search-field input {
+  min-height: 42px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 12px;
+  color: var(--ink);
+  background: var(--surface);
+}
+
+.chord-search-field input:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(36, 87, 197, 0.18);
+}
+
+.chord-result-status {
+  margin-bottom: 0;
+  background: var(--surface);
+  font-size: 0.9rem;
+}
+
+.chord-result-grid {
+  display: grid;
+  gap: 8px;
+  max-height: 520px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.chord-result-button {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--ink);
+  background: var(--surface);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.chord-result-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(31, 35, 40, 0.1);
+}
+
+.chord-result-button.is-active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.chord-result-button strong {
+  font-size: 1.08rem;
+}
+
+.chord-result-button span,
+.chord-empty-state,
+.chord-empty-detail p {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.chord-empty-state,
+.chord-empty-detail {
+  padding: 14px;
+}
+
+.chord-detail-panel {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+}
+
+.chord-detail-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 14px;
+}
+
+.chord-detail-heading h2 {
+  margin-bottom: 0;
+  font-size: clamp(1.35rem, 2.6vw, 2rem);
+  line-height: 1.16;
+}
+
+.chord-detail-heading h2 span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.chord-quality-badge {
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-size: 0.86rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.chord-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.chord-stat-tile strong {
+  overflow-wrap: anywhere;
+}
+
+.chord-info-card,
+.staff-info-panel {
+  padding: 14px;
+}
+
+.chord-info-card h3,
+.staff-info-panel h3,
+.fingering-section-heading h3,
+.fingering-card h4 {
+  margin-bottom: 8px;
+}
+
+.chord-info-card p,
+.staff-info-panel p,
+.fingering-section-heading p,
+.fingering-card p {
+  margin-bottom: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.chord-tone-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chord-tone-list li {
+  display: grid;
+  gap: 3px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: var(--surface);
+}
+
+.chord-tone-list strong {
+  font-size: 1.04rem;
+}
+
+.chord-tone-list span {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.staff-info-panel {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.34fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+}
+
+.chord-staff-stage {
+  min-height: 190px;
+  margin-bottom: 0;
+  background: var(--surface);
+}
+
+.fingering-section-heading {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.fingering-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.fingering-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.fingering-card-header {
+  display: grid;
+  gap: 8px;
+}
+
+.fingering-card-header h4 {
+  font-size: 1.05rem;
+}
+
+.fingering-card-header div {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--surface);
+}
+
+.fingering-card-header span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.fret-pattern {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-size: 1.1rem;
+  letter-spacing: 0.03em;
+}
+
+.guitar-chord-diagram {
+  width: min(100%, 220px);
+  height: auto;
+  justify-self: center;
+}
+
+.diagram-string-label,
+.diagram-fret-label {
+  fill: var(--muted);
+  font-size: 0.55rem;
+  font-weight: 700;
+}
+
+.diagram-open-muted {
+  fill: var(--ink);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.diagram-string,
+.diagram-fret {
+  stroke: #6f7885;
+  stroke-width: 1.2;
+}
+
+.diagram-nut {
+  stroke: var(--ink);
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+
+.diagram-dot,
+.diagram-barre {
+  fill: var(--accent);
+}
+
+.diagram-dot-label {
+  fill: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
 @media (max-width: 1060px) {
   .interval-toolbar {
     grid-template-columns: 1fr;
@@ -752,8 +1068,14 @@ p {
   .module-header,
   .settings-grid,
   .interval-toolbar,
-  .answer-row {
+  .answer-row,
+  .chord-browser-layout,
+  .staff-info-panel {
     grid-template-columns: 1fr;
+  }
+
+  .chord-browser-sidebar {
+    position: static;
   }
 
   .compact-toolbar {
@@ -770,11 +1092,11 @@ p {
     padding: 14px;
   }
 
-  .module-tabs,
   .note-answer-grid,
   .segmented-control,
   .segmented-control.option-set,
-  .choice-grid.four-choice {
+  .choice-grid.four-choice,
+  .chord-overview-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -826,7 +1148,8 @@ p {
   .note-answer-grid,
   .segmented-control,
   .segmented-control.option-set,
-  .choice-grid.four-choice {
+  .choice-grid.four-choice,
+  .chord-overview-grid {
     grid-template-columns: 1fr;
   }
 

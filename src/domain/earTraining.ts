@@ -253,18 +253,7 @@ export function getEarTrainingScalePlaybackNotes(
   rangeId: EarTrainingPitchRangeId = DEFAULT_EAR_TRAINING_PITCH_RANGE_ID,
 ): EarTrainingNote[] {
   const notes = getEarTrainingScaleNotes(scaleId, rangeId)
-  const tonic = notes[0]
-
-  return [
-    ...notes,
-    {
-      ...tonic,
-      id: tonic.id,
-      scaleDegree: 8,
-      pitch: createPitch(tonic.pitch.step, tonic.pitch.octave + 1, tonic.pitch.accidental),
-    },
-    tonic,
-  ]
+  return [...notes, notes[0]]
 }
 
 export function getEarTrainingNote(

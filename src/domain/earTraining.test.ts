@@ -38,11 +38,11 @@ describe('earTraining', () => {
     expect(getEarTrainingScaleNotes('Ab').map((note) => note.noteName)).toEqual(['Ab', 'Bb', 'C', 'Db', 'Eb', 'F', 'G'])
   })
 
-  it('按完整上行音阶、主音创建参考播放序列', () => {
+  it('按七个上行音阶音和原主音创建参考播放序列', () => {
     const playbackNotes = getEarTrainingScalePlaybackNotes('C', 'middle')
 
-    expect(playbackNotes.map((note) => note.noteName)).toEqual(['C', 'D', 'E', 'F', 'G', 'A', 'B', 'C', 'C'])
-    expect(playbackNotes.map((note) => note.pitch.midiNumber)).toEqual([60, 62, 64, 65, 67, 69, 71, 72, 60])
+    expect(playbackNotes.map((note) => note.noteName)).toEqual(['C', 'D', 'E', 'F', 'G', 'A', 'B', 'C'])
+    expect(playbackNotes.map((note) => note.pitch.midiNumber)).toEqual([60, 62, 64, 65, 67, 69, 71, 60])
   })
 
   it('支持低音区、中心区、高音区切换', () => {

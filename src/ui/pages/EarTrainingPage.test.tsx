@@ -39,7 +39,7 @@ describe('EarTrainingPage', () => {
     await user.click(screen.getByRole('button', { name: '开始练习' }))
 
     await screen.findByText('请判断听到的单音')
-    expect(playEarTrainingSound).toHaveBeenCalledTimes(10)
+    expect(playEarTrainingSound).toHaveBeenCalledTimes(9)
     expect(screen.getByRole('button', { name: '练习中' })).toBeDisabled()
     expect(screen.getAllByRole('button', { name: 'C · 1级' })).toHaveLength(1)
 
@@ -137,7 +137,7 @@ describe('EarTrainingPage', () => {
     await user.click(screen.getByRole('button', { name: '开始练习' }))
     await screen.findByText('请判断听到的单音')
 
-    expect(playEarTrainingSound).toHaveBeenCalledTimes(10)
+    expect(playEarTrainingSound).toHaveBeenCalledTimes(9)
     expect(playEarTrainingSound).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({ noteName: 'Bb', pitch: expect.objectContaining({ midiNumber: 70 }) }),

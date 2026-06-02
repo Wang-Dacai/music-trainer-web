@@ -5,8 +5,11 @@ import type { StaffClefName } from '../../domain/staffTrainer'
 
 export interface StaffNotationProps {
   clef: StaffClefName
-  firstPitch: Pitch
-  secondPitch: Pitch
+  firstPitch?: Pitch
+  secondPitch?: Pitch
+  pitches?: readonly Pitch[]
+  notationMode?: 'sequence' | 'chord'
+  ariaLabel?: string
 }
 
 const STAFF_WIDTH = 700
@@ -15,7 +18,14 @@ const VEXFLOW_FONT_BASE = '/fonts/vexflow'
 
 let vexflowFontsReady: Promise<void> | null = null
 
-export function StaffNotation({ clef, firstPitch, secondPitch }: StaffNotationProps) {
+export function StaffNotation({
+  clef,
+  firstPitch,
+  secondPitch,
+  pitches,
+  notationMode = 'sequence',
+  ariaLabel = '五线谱题目',
+}: StaffNotationProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -35,6 +45,12 @@ export function StaffNotation({ clef, firstPitch, secondPitch }: StaffNotationPr
         return
       }
 
+      const notes = createNotationNotes({ clef, firstPitch, secondPitch, pitches, notationMode })
+
+      if (notes.length === 0) {
+        return
+      }
+
       const renderer = new Renderer(container, Renderer.Backends.SVG)
       renderer.resize(STAFF_WIDTH, STAFF_HEIGHT)
 
@@ -45,7 +61,6 @@ export function StaffNotation({ clef, firstPitch, secondPitch }: StaffNotationPr
       stave.addClef(clef).addTimeSignature('4/4')
       stave.setContext(context).draw()
 
-      const notes = [createStaveNote(firstPitch, clef), createStaveNote(secondPitch, clef)]
       Formatter.FormatAndDraw(context, stave, notes)
     }
 
@@ -54,10 +69,10 @@ export function StaffNotation({ clef, firstPitch, secondPitch }: StaffNotationPr
     return () => {
       isCancelled = true
     }
-  }, [clef, firstPitch, secondPitch])
+  }, [clef, firstPitch, notationMode, pitches, secondPitch])
 
   return (
-    <div className="staff-notation" aria-label="五线谱题目">
+    <div className="staff-notation" aria-label={ariaLabel}>
       <div ref={containerRef} className="staff-notation-canvas" />
     </div>
   )
@@ -79,17 +94,42 @@ function ensureVexflowFonts(): Promise<void> {
   return vexflowFontsReady
 }
 
-function createStaveNote(pitch: Pitch, clef: StaffClefName): StaveNote {
+function createNotationNotes({
+  clef,
+  firstPitch,
+  secondPitch,
+  pitches,
+  notationMode,
+}: Pick<StaffNotationProps, 'clef' | 'firstPitch' | 'secondPitch' | 'pitches' | 'notationMode'>): StaveNote[] {
+  if (pitches && pitches.length > 0) {
+    if (notationMode === 'chord') {
+      return [createStaveNote(pitches, clef)]
+    }
+
+    return pitches.map((pitch) => createStaveNote([pitch], clef))
+  }
+
+  if (!firstPitch || !secondPitch) {
+    return []
+  }
+
+  return [createStaveNote([firstPitch], clef), createStaveNote([secondPitch], clef)]
+}
+
+function createStaveNote(pitches: readonly Pitch[], clef: StaffClefName): StaveNote {
   const staveNote = new StaveNote({
     clef,
-    keys: [toVexflowKey(pitch)],
+    keys: pitches.map(toVexflowKey),
     duration: 'q',
   })
-  const accidental = toVexflowAccidental(pitch.accidental)
 
-  if (accidental) {
-    staveNote.addModifier(new Accidental(accidental), 0)
-  }
+  pitches.forEach((pitch, index) => {
+    const accidental = toVexflowAccidental(pitch.accidental)
+
+    if (accidental) {
+      staveNote.addModifier(new Accidental(accidental), index)
+    }
+  })
 
   return staveNote
 }

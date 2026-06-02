@@ -388,7 +388,7 @@ export function EarTrainingPage({ isActive = true, onSessionComplete }: EarTrain
             {activeScale.label} · {activePitchRange.kicker} · {activeInstrument.label}
           </p>
           <h1 id="ear-training-title">Ear Training：单音听辨</h1>
-          <p>先听完整上行大调音阶和主音建立调性感，再判断目标音在当前音阶中的位置。</p>
+          <p>先听七个上行大调音阶音和主音建立调性感，再判断目标音在当前音阶中的位置。</p>
         </div>
         <div className="stats-grid" aria-label="当前练习统计">
           <StatTile value={stats.total} label="总题数" />

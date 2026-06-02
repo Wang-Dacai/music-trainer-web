@@ -14,10 +14,33 @@ coverage/
 .env.*
 !.env.example
 
-# 项目本地数据：保留说明文件和小样例，忽略大体积输入、缓存和输出
-data/input/
-data/output/
-data/cache/
+# 项目本地数据和生成内容：不公开提交
+data/
+output/
+
+# 本地工作资料和内部文档：不公开提交
+PLAN.md
+docs/
+.local/
+.local-docs/
+local/
+private/
+internal/
+legacy/
+drafts/
+旧项目*/
+内部*/
+私密*/
+给ai看的文档*/
+给AI看的文档*/
+*旧项目*
+*内部*
+*私密*
+*给ai*
+*给AI*
+*.local.md
+*.private.md
+*.draft.md
 
 # 编辑器和系统临时文件
 .idea/
