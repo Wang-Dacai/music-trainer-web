@@ -13,10 +13,19 @@ export interface OnlineSampleInstrument {
   samples: Record<string, string>
 }
 
-interface ActiveSamplePlayback {
-  id: number
+interface ActiveSampleVoice {
   source: AudioBufferSourceNode
   gainNode: GainNode
+}
+
+interface ActiveSamplePlayback {
+  id: number
+  voices: ActiveSampleVoice[]
+}
+
+export interface OnlineSamplePlaybackOptions {
+  gainScale?: number
+  shouldContinue?: () => boolean
 }
 
 const PIANO_SAMPLE_BASE_URL = 'https://tonejs.github.io/audio/salamander'
@@ -240,35 +249,79 @@ export async function playOnlineSamplePitch(
   instrumentId: OnlineSampleInstrumentId,
   durationMs: number,
 ): Promise<void> {
+  await playOnlineSamplePitches([pitch], instrumentId, durationMs)
+}
+
+export async function playOnlineSamplePitches(
+  pitches: readonly Pitch[],
+  instrumentId: OnlineSampleInstrumentId,
+  durationMs: number,
+  options: OnlineSamplePlaybackOptions = {},
+): Promise<void> {
   stopOnlineSample()
+
+  if (pitches.length === 0) {
+    return
+  }
 
   const context = await getAudioContext()
   const instrument = getOnlineSampleInstrument(instrumentId)
-  const sample = findNearestSample(pitch.midiNumber, instrument.samples)
-  const buffer = await loadAudioBuffer(sample.url)
-  const startAt = context.currentTime
-  const durationSeconds = durationMs / 1000
-  const stopAt = startAt + durationSeconds
-  const releaseSeconds = Math.min(instrument.releaseSeconds, durationSeconds / 2)
-  const source = context.createBufferSource()
-  const gainNode = context.createGain()
-  const currentPlayback = { id: ++playbackId, source, gainNode }
-
+  const currentPlayback: ActiveSamplePlayback = { id: ++playbackId, voices: [] }
   activePlayback = currentPlayback
-  source.buffer = buffer
-  source.playbackRate.setValueAtTime(2 ** ((pitch.midiNumber - sample.midiNumber) / 12), startAt)
 
-  gainNode.gain.setValueAtTime(0.0001, startAt)
-  gainNode.gain.linearRampToValueAtTime(instrument.gain, startAt + 0.012)
-  gainNode.gain.setValueAtTime(instrument.gain, Math.max(startAt + 0.012, stopAt - releaseSeconds))
-  gainNode.gain.linearRampToValueAtTime(0.0001, stopAt)
+  try {
+    const loadedSamples = await Promise.all(
+      pitches.map(async (pitch) => {
+        const sample = findNearestSample(pitch.midiNumber, instrument.samples)
+        const buffer = await loadAudioBuffer(sample.url)
 
-  source.connect(gainNode)
-  gainNode.connect(context.destination)
-  source.start(startAt)
-  source.stop(stopAt + 0.04)
+        return { pitch, sample, buffer }
+      }),
+    )
 
-  await waitForSampleEnd(source, durationMs + 80)
+    if (activePlayback?.id !== currentPlayback.id || options.shouldContinue?.() === false) {
+      if (activePlayback?.id === currentPlayback.id) {
+        activePlayback = null
+      }
+      return
+    }
+
+    const startAt = context.currentTime
+    const durationSeconds = durationMs / 1000
+    const stopAt = startAt + durationSeconds
+    const releaseSeconds = Math.min(instrument.releaseSeconds, durationSeconds / 2)
+    const gainValue = instrument.gain * (options.gainScale ?? 1)
+
+    currentPlayback.voices = loadedSamples.map(({ pitch, sample, buffer }) => {
+      const source = context.createBufferSource()
+      const gainNode = context.createGain()
+
+      source.buffer = buffer
+      source.playbackRate.setValueAtTime(2 ** ((pitch.midiNumber - sample.midiNumber) / 12), startAt)
+
+      gainNode.gain.setValueAtTime(0.0001, startAt)
+      gainNode.gain.linearRampToValueAtTime(gainValue, startAt + 0.012)
+      gainNode.gain.setValueAtTime(gainValue, Math.max(startAt + 0.012, stopAt - releaseSeconds))
+      gainNode.gain.linearRampToValueAtTime(0.0001, stopAt)
+
+      source.connect(gainNode)
+      gainNode.connect(context.destination)
+
+      return { source, gainNode }
+    })
+
+    currentPlayback.voices.forEach(({ source }) => {
+      source.start(startAt)
+      source.stop(stopAt + 0.04)
+    })
+
+    await Promise.all(currentPlayback.voices.map(({ source }) => waitForSampleEnd(source, durationMs + 80)))
+  } catch (error) {
+    if (activePlayback?.id === currentPlayback.id) {
+      stopOnlineSample()
+    }
+    throw error
+  }
 
   if (activePlayback?.id === currentPlayback.id) {
     stopOnlineSample()
@@ -280,13 +333,16 @@ export function stopOnlineSample(): void {
     return
   }
 
-  try {
-    activePlayback.source.stop()
-  } catch {
-    // 采样可能已经按计划结束。
-  }
-  disconnectNode(activePlayback.source)
-  disconnectNode(activePlayback.gainNode)
+  activePlayback.voices.forEach(({ source, gainNode }) => {
+    try {
+      source.stop()
+    } catch {
+      // 采样可能已经按计划结束。
+    }
+    disconnectNode(source)
+    disconnectNode(gainNode)
+  })
+
   activePlayback = null
 }
 

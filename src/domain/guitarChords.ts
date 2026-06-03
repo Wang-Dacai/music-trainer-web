@@ -1,8 +1,8 @@
 import { createPitch, formatPitch, type Accidental, type NoteStep, type Pitch } from './pitch'
 
-export type GuitarChordRoot = 'C' | 'D' | 'E' | 'F' | 'G' | 'A' | 'B'
-export type GuitarChordQualityId = 'major' | 'minor' | 'dominant7' | 'major7'
-export type GuitarChordSuffix = '' | 'm' | '7' | 'maj7'
+export type GuitarChordRoot = 'C' | 'C#' | 'D' | 'Eb' | 'E' | 'F' | 'F#' | 'G' | 'G#' | 'Ab' | 'A' | 'Bb' | 'B'
+export type GuitarChordQualityId = 'major' | 'minor' | 'dominant7' | 'major7' | 'minor7' | 'sus4' | 'sus2'
+export type GuitarChordSuffix = '' | 'm' | '7' | 'maj7' | 'm7' | 'sus4' | 'sus2'
 export type GuitarChordId = `${GuitarChordRoot}${GuitarChordSuffix}`
 export type GuitarStringFret = number | 'x'
 export type GuitarStringNumber = 1 | 2 | 3 | 4 | 5 | 6
@@ -58,9 +58,14 @@ export interface GuitarChord {
 
 type PitchSpec = readonly [NoteStep, number, Accidental?]
 
+interface ChordIntervalSpec {
+  degreeOffset: number
+  semitones: number
+}
+
 interface ChordToneData {
   tones: readonly string[]
-  staffPitches: readonly PitchSpec[]
+  staffPitches: readonly Pitch[]
 }
 
 export const GUITAR_CHORD_QUALITIES: Record<GuitarChordQualityId, GuitarChordQuality> = {
@@ -93,64 +98,165 @@ export const GUITAR_CHORD_QUALITIES: Record<GuitarChordQualityId, GuitarChordQua
     label: '大七和弦',
     formula: '1 · 3 · 5 · 7',
     suffix: 'maj7',
-    aliases: ['major7', 'maj7', 'm7', 'M7', '△7', 'Δ7', '大七', '大七和弦'],
+    aliases: ['major7', 'maj7', 'M7', '△7', 'Δ7', '大七', '大七和弦'],
     toneRoles: ['根音', '大三音', '纯五音', '大七音'],
+  },
+  minor7: {
+    id: 'minor7',
+    label: '小七和弦',
+    formula: '1 · b3 · 5 · b7',
+    suffix: 'm7',
+    aliases: ['minor7', 'min7', 'm7', '小七', '小七和弦'],
+    toneRoles: ['根音', '小三音', '纯五音', '小七音'],
+  },
+  sus4: {
+    id: 'sus4',
+    label: '挂四和弦',
+    formula: '1 · 4 · 5',
+    suffix: 'sus4',
+    aliases: ['sus4', 'sus', '挂四', '挂四和弦'],
+    toneRoles: ['根音', '纯四音', '纯五音'],
+  },
+  sus2: {
+    id: 'sus2',
+    label: '挂二和弦',
+    formula: '1 · 2 · 5',
+    suffix: 'sus2',
+    aliases: ['sus2', '挂二', '挂二和弦'],
+    toneRoles: ['根音', '大二音', '纯五音'],
   },
 }
 
-const ROOTS: readonly GuitarChordRoot[] = ['C', 'D', 'E', 'F', 'G', 'A', 'B']
-const QUALITY_ORDER: readonly GuitarChordQualityId[] = ['major', 'minor', 'dominant7', 'major7']
-const COMMON_CHORD_ORDER: readonly GuitarChordId[] = ['C', 'Am', 'G', 'G7', 'Cmaj7', 'D', 'Dm', 'Em', 'A', 'E', 'F']
+const ROOTS: readonly GuitarChordRoot[] = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'G#', 'Ab', 'A', 'Bb', 'B']
+const QUALITY_ORDER: readonly GuitarChordQualityId[] = ['major', 'minor', 'dominant7', 'major7', 'minor7', 'sus4', 'sus2']
+const COMMON_CHORD_ORDER: readonly GuitarChordId[] = [
+  'C',
+  'Am',
+  'G',
+  'G7',
+  'Cmaj7',
+  'Am7',
+  'D',
+  'Dm',
+  'Dm7',
+  'Em',
+  'Em7',
+  'A',
+  'A7',
+  'Asus2',
+  'Asus4',
+  'E',
+  'E7',
+  'Esus4',
+  'F',
+  'Fmaj7',
+  'Dsus2',
+  'Dsus4',
+  'F#m',
+  'C#m',
+  'Bb',
+  'Eb',
+  'Ab',
+]
+
+const ROOT_PITCH_SPECS: Record<GuitarChordRoot, PitchSpec> = {
+  C: ['C', 4],
+  'C#': ['C', 4, 'sharp'],
+  D: ['D', 4],
+  Eb: ['E', 4, 'flat'],
+  E: ['E', 4],
+  F: ['F', 4],
+  'F#': ['F', 4, 'sharp'],
+  G: ['G', 4],
+  'G#': ['G', 3, 'sharp'],
+  Ab: ['A', 3, 'flat'],
+  A: ['A', 3],
+  Bb: ['B', 3, 'flat'],
+  B: ['B', 3],
+}
+
+const ROOT_ALIASES: Partial<Record<GuitarChordRoot, readonly string[]>> = {
+  'C#': ['Db'],
+  Eb: ['D#'],
+  'F#': ['Gb'],
+  'G#': ['Ab'],
+  Ab: ['G#'],
+  Bb: ['A#'],
+}
+
+const STEP_ORDER: readonly NoteStep[] = ['C', 'D', 'E', 'F', 'G', 'A', 'B']
+
+const QUALITY_INTERVALS: Record<GuitarChordQualityId, readonly ChordIntervalSpec[]> = {
+  major: [
+    { degreeOffset: 0, semitones: 0 },
+    { degreeOffset: 2, semitones: 4 },
+    { degreeOffset: 4, semitones: 7 },
+  ],
+  minor: [
+    { degreeOffset: 0, semitones: 0 },
+    { degreeOffset: 2, semitones: 3 },
+    { degreeOffset: 4, semitones: 7 },
+  ],
+  dominant7: [
+    { degreeOffset: 0, semitones: 0 },
+    { degreeOffset: 2, semitones: 4 },
+    { degreeOffset: 4, semitones: 7 },
+    { degreeOffset: 6, semitones: 10 },
+  ],
+  major7: [
+    { degreeOffset: 0, semitones: 0 },
+    { degreeOffset: 2, semitones: 4 },
+    { degreeOffset: 4, semitones: 7 },
+    { degreeOffset: 6, semitones: 11 },
+  ],
+  minor7: [
+    { degreeOffset: 0, semitones: 0 },
+    { degreeOffset: 2, semitones: 3 },
+    { degreeOffset: 4, semitones: 7 },
+    { degreeOffset: 6, semitones: 10 },
+  ],
+  sus4: [
+    { degreeOffset: 0, semitones: 0 },
+    { degreeOffset: 3, semitones: 5 },
+    { degreeOffset: 4, semitones: 7 },
+  ],
+  sus2: [
+    { degreeOffset: 0, semitones: 0 },
+    { degreeOffset: 1, semitones: 2 },
+    { degreeOffset: 4, semitones: 7 },
+  ],
+}
 
 const E_STRING_ROOT_FRETS: Record<GuitarChordRoot, number> = {
   E: 0,
   F: 1,
+  'F#': 2,
   G: 3,
+  'G#': 4,
+  Ab: 4,
   A: 5,
+  Bb: 6,
   B: 7,
   C: 8,
+  'C#': 9,
   D: 10,
+  Eb: 11,
 }
 
 const A_STRING_ROOT_FRETS: Record<GuitarChordRoot, number> = {
   A: 0,
+  Bb: 1,
   B: 2,
   C: 3,
+  'C#': 4,
   D: 5,
+  Eb: 6,
   E: 7,
   F: 8,
+  'F#': 9,
   G: 10,
-}
-
-const TONE_DATA: Record<GuitarChordId, ChordToneData> = {
-  C: { tones: ['C', 'E', 'G'], staffPitches: [['C', 4], ['E', 4], ['G', 4]] },
-  D: { tones: ['D', 'F#', 'A'], staffPitches: [['D', 4], ['F', 4, 'sharp'], ['A', 4]] },
-  E: { tones: ['E', 'G#', 'B'], staffPitches: [['E', 4], ['G', 4, 'sharp'], ['B', 4]] },
-  F: { tones: ['F', 'A', 'C'], staffPitches: [['F', 4], ['A', 4], ['C', 5]] },
-  G: { tones: ['G', 'B', 'D'], staffPitches: [['G', 4], ['B', 4], ['D', 5]] },
-  A: { tones: ['A', 'C#', 'E'], staffPitches: [['A', 3], ['C', 4, 'sharp'], ['E', 4]] },
-  B: { tones: ['B', 'D#', 'F#'], staffPitches: [['B', 3], ['D', 4, 'sharp'], ['F', 4, 'sharp']] },
-  Am: { tones: ['A', 'C', 'E'], staffPitches: [['A', 3], ['C', 4], ['E', 4]] },
-  Bm: { tones: ['B', 'D', 'F#'], staffPitches: [['B', 3], ['D', 4], ['F', 4, 'sharp']] },
-  Cm: { tones: ['C', 'Eb', 'G'], staffPitches: [['C', 4], ['E', 4, 'flat'], ['G', 4]] },
-  Dm: { tones: ['D', 'F', 'A'], staffPitches: [['D', 4], ['F', 4], ['A', 4]] },
-  Em: { tones: ['E', 'G', 'B'], staffPitches: [['E', 4], ['G', 4], ['B', 4]] },
-  Fm: { tones: ['F', 'Ab', 'C'], staffPitches: [['F', 4], ['A', 4, 'flat'], ['C', 5]] },
-  Gm: { tones: ['G', 'Bb', 'D'], staffPitches: [['G', 4], ['B', 4, 'flat'], ['D', 5]] },
-  C7: { tones: ['C', 'E', 'G', 'Bb'], staffPitches: [['C', 4], ['E', 4], ['G', 4], ['B', 4, 'flat']] },
-  D7: { tones: ['D', 'F#', 'A', 'C'], staffPitches: [['D', 4], ['F', 4, 'sharp'], ['A', 4], ['C', 5]] },
-  E7: { tones: ['E', 'G#', 'B', 'D'], staffPitches: [['E', 4], ['G', 4, 'sharp'], ['B', 4], ['D', 5]] },
-  F7: { tones: ['F', 'A', 'C', 'Eb'], staffPitches: [['F', 4], ['A', 4], ['C', 5], ['E', 5, 'flat']] },
-  G7: { tones: ['G', 'B', 'D', 'F'], staffPitches: [['G', 4], ['B', 4], ['D', 5], ['F', 5]] },
-  A7: { tones: ['A', 'C#', 'E', 'G'], staffPitches: [['A', 3], ['C', 4, 'sharp'], ['E', 4], ['G', 4]] },
-  B7: { tones: ['B', 'D#', 'F#', 'A'], staffPitches: [['B', 3], ['D', 4, 'sharp'], ['F', 4, 'sharp'], ['A', 4]] },
-  Cmaj7: { tones: ['C', 'E', 'G', 'B'], staffPitches: [['C', 4], ['E', 4], ['G', 4], ['B', 4]] },
-  Dmaj7: { tones: ['D', 'F#', 'A', 'C#'], staffPitches: [['D', 4], ['F', 4, 'sharp'], ['A', 4], ['C', 5, 'sharp']] },
-  Emaj7: { tones: ['E', 'G#', 'B', 'D#'], staffPitches: [['E', 4], ['G', 4, 'sharp'], ['B', 4], ['D', 5, 'sharp']] },
-  Fmaj7: { tones: ['F', 'A', 'C', 'E'], staffPitches: [['F', 4], ['A', 4], ['C', 5], ['E', 5]] },
-  Gmaj7: { tones: ['G', 'B', 'D', 'F#'], staffPitches: [['G', 4], ['B', 4], ['D', 5], ['F', 5, 'sharp']] },
-  Amaj7: { tones: ['A', 'C#', 'E', 'G#'], staffPitches: [['A', 3], ['C', 4, 'sharp'], ['E', 4], ['G', 4, 'sharp']] },
-  Bmaj7: { tones: ['B', 'D#', 'F#', 'A#'], staffPitches: [['B', 3], ['D', 4, 'sharp'], ['F', 4, 'sharp'], ['A', 4, 'sharp']] },
+  'G#': 11,
+  Ab: 11,
 }
 
 const COMMON_OPEN_FINGERINGS: Partial<Record<GuitarChordId, GuitarFingering>> = {
@@ -177,6 +283,16 @@ const COMMON_OPEN_FINGERINGS: Partial<Record<GuitarChordId, GuitarFingering>> = 
   }),
   Em: createFingering('Em-open', '开放式 Em', [0, 2, 2, 0, 0, 0], '最容易上手的开放小三和弦之一，只需按住 5 弦和 4 弦 2 品。', {
     fingers: [null, 2, 3, null, null, null],
+  }),
+  Am7: createFingering('Am7-open', '开放式 Am7', ['x', 0, 2, 0, 1, 0], '从开放 Am 抬起 3 弦 2 品即可得到 Am7，常用于民谣和流行伴奏。', {
+    fingers: [null, null, 2, null, 1, null],
+  }),
+  Dm7: createFingering('Dm7-open', '开放式 Dm7', ['x', 'x', 0, 2, 1, 1], '开放 Dm7 保留 Dm 的小三色彩，并在高音加入小七音，适合柔和的下属功能。', {
+    fingers: [null, null, null, 2, 1, 1],
+    barres: [{ fret: 1, fromString: 2, toString: 1, finger: 1 }],
+  }),
+  Em7: createFingering('Em7-open', '开放式 Em7', [0, 2, 0, 0, 0, 0], '开放 Em7 只需按住 5 弦 2 品，声音比 Em 更松弛通透。', {
+    fingers: [null, 2, null, null, null, null],
   }),
   C7: createFingering('C7-open', '开放式 C7', ['x', 3, 2, 3, 1, 0], '在开放 C 的基础上加入 3 弦 3 品的 Bb，形成属七张力。', {
     fingers: [null, 3, 2, 4, 1, null],
@@ -219,9 +335,30 @@ const COMMON_OPEN_FINGERINGS: Partial<Record<GuitarChordId, GuitarFingering>> = 
     fingers: [null, 1, 4, 2, 3, 1],
     barres: [{ fret: 2, fromString: 5, toString: 1, finger: 1 }],
   }),
+  Dsus4: createFingering('Dsus4-open', '开放式 Dsus4', ['x', 'x', 0, 2, 3, 3], '开放 Dsus4 在 1 弦加入 G 音，常和 D、Dsus2 来回装饰。', {
+    fingers: [null, null, null, 1, 3, 4],
+  }),
+  Asus4: createFingering('Asus4-open', '开放式 Asus4', ['x', 0, 2, 2, 3, 0], '开放 Asus4 在 2 弦加入 D 音，适合与 A 和弦制造悬挂解决。', {
+    fingers: [null, null, 1, 2, 3, null],
+  }),
+  Esus4: createFingering('Esus4-open', '开放式 Esus4', [0, 2, 2, 2, 0, 0], '开放 Esus4 在 3 弦加入 A 音，常用于 E 调的扫弦装饰。', {
+    fingers: [null, 1, 2, 3, null, null],
+  }),
+  Dsus2: createFingering('Dsus2-open', '开放式 Dsus2', ['x', 'x', 0, 2, 3, 0], '开放 Dsus2 保留 1 弦空弦作为 E 音，声音清亮开放。', {
+    fingers: [null, null, null, 1, 3, null],
+  }),
+  Asus2: createFingering('Asus2-open', '开放式 Asus2', ['x', 0, 2, 2, 0, 0], '开放 Asus2 使用 2 弦空弦作为 B 音，适合流行伴奏中的明亮色彩。', {
+    fingers: [null, null, 1, 2, null, null],
+  }),
+  Esus2: createFingering('Esus2-open', '开放式 Esus2', [0, 2, 2, 4, 0, 0], '开放 Esus2 在 3 弦加入 F# 音，保留低音 E 的稳定感。', {
+    fingers: [null, 1, 2, 4, null, null],
+  }),
 }
 
-const ALL_CHORD_IDS = ROOTS.flatMap((root) => QUALITY_ORDER.map((quality) => `${root}${GUITAR_CHORD_QUALITIES[quality].suffix}` as GuitarChordId))
+const EXCLUDED_CHORD_IDS: readonly GuitarChordId[] = ['G#maj7']
+const ALL_CHORD_IDS = ROOTS.flatMap((root) => QUALITY_ORDER.map((quality) => `${root}${GUITAR_CHORD_QUALITIES[quality].suffix}` as GuitarChordId)).filter(
+  (id) => !EXCLUDED_CHORD_IDS.includes(id),
+)
 const GUITAR_CHORD_IDS = [...COMMON_CHORD_ORDER, ...ALL_CHORD_IDS.filter((id) => !COMMON_CHORD_ORDER.includes(id))]
 
 export const GUITAR_CHORDS: readonly GuitarChord[] = GUITAR_CHORD_IDS.map(createGuitarChord)
@@ -229,12 +366,14 @@ export const GUITAR_CHORDS: readonly GuitarChord[] = GUITAR_CHORD_IDS.map(create
 const GUITAR_CHORDS_BY_ID = new Map<GuitarChordId, GuitarChord>(GUITAR_CHORDS.map((chord) => [chord.id, chord]))
 
 export function normalizeGuitarChordQuery(query: string): string {
-  return query
+  const compactQuery = query
     .normalize('NFKC')
     .trim()
-    .toLowerCase()
     .replace(/[△Δ]/g, 'maj')
     .replace(/[\s_\-]+/g, '')
+    .replace(/^([A-Ga-g](?:#|b)?)(M7)$/u, '$1maj7')
+
+  return compactQuery.toLowerCase()
 }
 
 export function searchGuitarChords(query: string): GuitarChord[] {
@@ -244,7 +383,7 @@ export function searchGuitarChords(query: string): GuitarChord[] {
     return [...GUITAR_CHORDS]
   }
 
-  return GUITAR_CHORDS.filter((chord) => getSearchTokens(chord).some((token) => token.includes(normalizedQuery))).sort(
+  return GUITAR_CHORDS.filter((chord) => getChordNameSearchTokens(chord).some((token) => token.includes(normalizedQuery))).sort(
     (firstChord, secondChord) => getMatchRank(firstChord, normalizedQuery) - getMatchRank(secondChord, normalizedQuery),
   )
 }
@@ -269,7 +408,7 @@ function createGuitarChord(id: GuitarChordId): GuitarChord {
   const root = getChordRoot(id)
   const quality = getChordQuality(id)
   const qualityConfig = GUITAR_CHORD_QUALITIES[quality]
-  const toneData = TONE_DATA[id]
+  const toneData = createChordToneData(root, quality)
 
   return {
     id,
@@ -281,35 +420,82 @@ function createGuitarChord(id: GuitarChordId): GuitarChord {
     formula: qualityConfig.formula,
     tones: toneData.tones,
     toneRoles: qualityConfig.toneRoles,
-    staffPitches: toneData.staffPitches.map(([step, octave, accidental]) => createPitch(step, octave, accidental ?? null)),
+    staffPitches: toneData.staffPitches,
     fingerings: createFingerings(root, quality, id),
   }
 }
 
+function createChordToneData(root: GuitarChordRoot, quality: GuitarChordQualityId): ChordToneData {
+  const rootPitch = createPitchFromSpec(ROOT_PITCH_SPECS[root])
+  const intervals = QUALITY_INTERVALS[quality]
+  const staffPitches = intervals.map((interval) => createIntervalPitch(rootPitch, interval))
+
+  return {
+    tones: staffPitches.map(formatToneName),
+    staffPitches,
+  }
+}
+
+function createPitchFromSpec([step, octave, accidental]: PitchSpec): Pitch {
+  return createPitch(step, octave, accidental ?? null)
+}
+
+function createIntervalPitch(rootPitch: Pitch, interval: ChordIntervalSpec): Pitch {
+  const rootStepIndex = STEP_ORDER.indexOf(rootPitch.step)
+  const targetStepIndex = rootStepIndex + interval.degreeOffset
+  const targetStep = STEP_ORDER[targetStepIndex % STEP_ORDER.length]
+  const targetOctave = rootPitch.octave + Math.floor(targetStepIndex / STEP_ORDER.length)
+  const targetMidiNumber = rootPitch.midiNumber + interval.semitones
+  const naturalPitch = createPitch(targetStep, targetOctave)
+  const accidental = semitoneDifferenceToAccidental(targetMidiNumber - naturalPitch.midiNumber)
+
+  return createPitch(targetStep, targetOctave, accidental)
+}
+
+function semitoneDifferenceToAccidental(difference: number): Accidental {
+  if (difference === -1) return 'flat'
+  if (difference === 0) return null
+  if (difference === 1) return 'sharp'
+
+  throw new Error(`无法用单升降号拼写和弦音: ${difference}`)
+}
+
+function formatToneName(pitch: Pitch): string {
+  return formatPitch(pitch).replace(/\d+$/u, '')
+}
+
 function createAliases(root: GuitarChordRoot, quality: GuitarChordQualityId, id: GuitarChordId): readonly string[] {
   const qualityConfig = GUITAR_CHORD_QUALITIES[quality]
-  const aliases = [
-    id,
-    `${root}${qualityConfig.suffix}`,
-    `${root} ${qualityConfig.label}`,
-    ...qualityConfig.aliases.map((alias) => `${root}${alias}`),
-    ...qualityConfig.aliases.map((alias) => `${root} ${alias}`),
-  ]
+  const rootNames = [root, ...(ROOT_ALIASES[root] ?? [])]
+  const aliases = rootNames.flatMap((rootName) => [
+    `${rootName}${qualityConfig.suffix}`,
+    `${rootName} ${qualityConfig.label}`,
+    ...qualityConfig.aliases.map((alias) => `${rootName}${alias}`),
+    ...qualityConfig.aliases.map((alias) => `${rootName} ${alias}`),
+  ])
+
+  aliases.unshift(id)
 
   return Array.from(new Set(aliases))
 }
 
 function getChordRoot(id: GuitarChordId): GuitarChordRoot {
-  if (id.endsWith('maj7')) return id.slice(0, -4) as GuitarChordRoot
-  if (id.endsWith('7') || id.endsWith('m')) return id.slice(0, -1) as GuitarChordRoot
-  return id as GuitarChordRoot
+  const quality = getChordQuality(id)
+  const suffix = GUITAR_CHORD_QUALITIES[quality].suffix
+
+  return (suffix ? id.slice(0, -suffix.length) : id) as GuitarChordRoot
 }
 
 function getChordQuality(id: GuitarChordId): GuitarChordQualityId {
-  if (id.endsWith('maj7')) return 'major7'
-  if (id.endsWith('7')) return 'dominant7'
-  if (id.endsWith('m')) return 'minor'
-  return 'major'
+  const suffixMatch = getSuffixMatchCandidates().find((quality) => id.endsWith(quality.suffix))
+
+  return suffixMatch?.id ?? 'major'
+}
+
+function getSuffixMatchCandidates(): GuitarChordQuality[] {
+  return Object.values(GUITAR_CHORD_QUALITIES)
+    .filter((quality) => quality.suffix.length > 0)
+    .sort((firstQuality, secondQuality) => secondQuality.suffix.length - firstQuality.suffix.length)
 }
 
 function createFingerings(root: GuitarChordRoot, quality: GuitarChordQualityId, id: GuitarChordId): readonly GuitarFingering[] {
@@ -341,12 +527,18 @@ function createEShapeFingering(root: GuitarChordRoot, quality: GuitarChordQualit
     minor: [fret, fret + 2, fret + 2, fret, fret, fret],
     dominant7: [fret, fret + 2, fret, fret + 1, fret, fret],
     major7: [fret, fret + 2, fret + 1, fret + 1, fret, fret],
+    minor7: [fret, fret + 2, fret, fret, fret, fret],
+    sus4: [fret, fret + 2, fret + 2, fret + 2, fret, fret],
+    sus2: [fret, fret + 2, fret + 2, fret + 4, fret, fret],
   }
   const fingersByQuality: Record<GuitarChordQualityId, SixStringFingers> = {
     major: [1, 3, 4, 2, 1, 1],
     minor: [1, 3, 4, 1, 1, 1],
     dominant7: [1, 3, 1, 2, 1, 1],
     major7: [1, 3, 2, 2, 1, 1],
+    minor7: [1, 3, 1, 1, 1, 1],
+    sus4: [1, 3, 4, 2, 1, 1],
+    sus2: [1, 2, 3, 4, 1, 1],
   }
 
   return createFingering(
@@ -373,12 +565,18 @@ function createAShapeFingering(root: GuitarChordRoot, quality: GuitarChordQualit
     minor: ['x', fret, fret + 2, fret + 2, fret + 1, fret],
     dominant7: ['x', fret, fret + 2, fret, fret + 2, fret],
     major7: ['x', fret, fret + 2, fret + 1, fret + 2, fret],
+    minor7: ['x', fret, fret + 2, fret, fret + 1, fret],
+    sus4: ['x', fret, fret + 2, fret + 2, fret + 3, fret],
+    sus2: ['x', fret, fret + 2, fret + 2, fret, fret],
   }
   const fingersByQuality: Record<GuitarChordQualityId, SixStringFingers> = {
     major: [null, 1, 3, 3, 3, 1],
     minor: [null, 1, 3, 4, 2, 1],
     dominant7: [null, 1, 3, 1, 4, 1],
     major7: [null, 1, 3, 2, 4, 1],
+    minor7: [null, 1, 3, 1, 2, 1],
+    sus4: [null, 1, 2, 3, 4, 1],
+    sus2: [null, 1, 2, 3, 1, 1],
   }
 
   return createFingering(
@@ -430,15 +628,8 @@ function getLowestFrettedPosition(fingering: GuitarFingering): number {
   return Math.min(...frettedPositions)
 }
 
-function getSearchTokens(chord: GuitarChord): string[] {
-  return [
-    chord.symbol,
-    chord.chineseName,
-    chord.qualityLabel,
-    chord.formula,
-    ...chord.tones,
-    ...chord.aliases,
-  ].map(normalizeGuitarChordQuery)
+function getChordNameSearchTokens(chord: GuitarChord): string[] {
+  return [chord.symbol, ...chord.aliases].map(normalizeGuitarChordQuery)
 }
 
 function getMatchRank(chord: GuitarChord, normalizedQuery: string): number {

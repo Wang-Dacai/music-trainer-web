@@ -743,13 +743,14 @@ p {
 
 .chord-browser-layout {
   display: grid;
-  grid-template-columns: minmax(260px, 0.38fr) minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: minmax(300px, 340px) minmax(0, 1fr);
+  gap: 20px;
   align-items: start;
 }
 
 .chord-browser-sidebar,
 .chord-detail-panel,
+.chord-playback-panel,
 .chord-info-card,
 .staff-info-panel,
 .fingering-card {
@@ -762,8 +763,32 @@ p {
   position: sticky;
   top: 14px;
   display: grid;
-  gap: 12px;
-  padding: 14px;
+  gap: 14px;
+  padding: 16px;
+}
+
+.chord-sidebar-header {
+  display: grid;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 12px;
+}
+
+.chord-sidebar-header .module-kicker {
+  margin-bottom: 0;
+}
+
+.chord-sidebar-header h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  line-height: 1.18;
+}
+
+.chord-sidebar-header p:last-child {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
 
 .chord-search-field {
@@ -800,19 +825,23 @@ p {
 
 .chord-result-grid {
   display: grid;
+  grid-template-columns: 1fr;
   gap: 8px;
-  max-height: 520px;
+  max-height: min(520px, calc(100vh - 300px));
   overflow: auto;
   padding-right: 2px;
 }
 
 .chord-result-button {
+  min-width: 0;
+  min-height: 52px;
   display: grid;
-  gap: 4px;
-  justify-items: start;
+  grid-template-columns: minmax(52px, auto) minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: center;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: 9px 12px;
   color: var(--ink);
   background: var(--surface);
   cursor: pointer;
@@ -837,6 +866,12 @@ p {
 
 .chord-result-button strong {
   font-size: 1.08rem;
+  white-space: nowrap;
+}
+
+.chord-result-button span {
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 .chord-result-button span,
@@ -902,11 +937,37 @@ p {
   overflow-wrap: anywhere;
 }
 
+.chord-playback-panel,
 .chord-info-card,
 .staff-info-panel {
   padding: 14px;
 }
 
+.chord-playback-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.chord-playback-controls {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.8fr) minmax(220px, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.chord-playback-mode-control {
+  grid-template-columns: repeat(2, minmax(86px, 1fr));
+}
+
+.chord-playback-actions {
+  justify-content: flex-start;
+}
+
+.chord-playback-status {
+  margin-bottom: 0;
+}
+
+.chord-playback-panel h3,
 .chord-info-card h3,
 .staff-info-panel h3,
 .fingering-section-heading h3,
@@ -914,6 +975,7 @@ p {
   margin-bottom: 8px;
 }
 
+.chord-playback-panel p,
 .chord-info-card p,
 .staff-info-panel p,
 .fingering-section-heading p,
@@ -1076,6 +1138,10 @@ p {
 
   .chord-browser-sidebar {
     position: static;
+  }
+
+  .chord-playback-controls {
+    grid-template-columns: 1fr;
   }
 
   .compact-toolbar {

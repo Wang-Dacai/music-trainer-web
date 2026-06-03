@@ -115,7 +115,9 @@ function App() {
         </div>
       )}
 
-      <PracticeRecordsPanel history={practiceHistory} onDeleteSession={handleDeleteSession} />
+      {activeModule !== 'guitar-chord-reading' && (
+        <PracticeRecordsPanel history={practiceHistory} onDeleteSession={handleDeleteSession} />
+      )}
     </main>
   )
 }

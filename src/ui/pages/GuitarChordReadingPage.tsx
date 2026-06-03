@@ -1,4 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  DEFAULT_GUITAR_CHORD_PLAYBACK_MODE,
+  GUITAR_CHORD_PLAYBACK_MODES,
+  playGuitarChordSound,
+  stopGuitarChordPlayback,
+  type GuitarChordPlaybackMode,
+} from '../../audio/guitarChordPlayback'
 import {
   GUITAR_CHORDS,
   formatChordToneText,
@@ -17,15 +24,102 @@ export interface GuitarChordReadingPageProps {
 }
 
 const DEFAULT_CHORD_ID: GuitarChordId = 'C'
+type PlaybackStatusTone = 'neutral' | 'success' | 'error'
 
 export function GuitarChordReadingPage({ isActive = true }: GuitarChordReadingPageProps) {
   const [query, setQuery] = useState('')
   const [selectedChordId, setSelectedChordId] = useState(DEFAULT_CHORD_ID)
+  const [playbackMode, setPlaybackMode] = useState<GuitarChordPlaybackMode>(DEFAULT_GUITAR_CHORD_PLAYBACK_MODE)
+  const [isPlayingChord, setIsPlayingChord] = useState(false)
+  const [playbackStatus, setPlaybackStatus] = useState('默认播放整和弦')
+  const [playbackStatusTone, setPlaybackStatusTone] = useState<PlaybackStatusTone>('neutral')
+  const playbackTokenRef = useRef(0)
+  const isMountedRef = useRef(false)
   const results = useMemo(() => searchGuitarChords(query), [query])
   const selectedChord = getSelectedChord(results, selectedChordId)
 
+  useEffect(() => {
+    isMountedRef.current = true
+
+    return () => {
+      isMountedRef.current = false
+      createPlaybackToken()
+      stopGuitarChordPlayback()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isActive) {
+      createPlaybackToken()
+      stopGuitarChordPlayback()
+      setIsPlayingChord(false)
+      setPlaybackStatus('已暂停')
+      setPlaybackStatusTone('neutral')
+    }
+  }, [isActive])
+
   function handleSelectChord(chord: GuitarChord) {
+    createPlaybackToken()
+    stopGuitarChordPlayback()
+    setIsPlayingChord(false)
     setSelectedChordId(chord.id)
+    setPlaybackStatus(`已选择 ${chord.symbol}`)
+    setPlaybackStatusTone('neutral')
+  }
+
+  function handlePlaybackModeChange(nextMode: GuitarChordPlaybackMode) {
+    setPlaybackMode(nextMode)
+    setPlaybackStatus(`已选择${getPlaybackModeLabel(nextMode)}`)
+    setPlaybackStatusTone('neutral')
+  }
+
+  async function handlePlayChord() {
+    if (isPlayingChord) {
+      return
+    }
+
+    const token = createPlaybackToken()
+    const modeLabel = getPlaybackModeLabel(playbackMode)
+    setIsPlayingChord(true)
+    setPlaybackStatus(`正在播放 ${selectedChord.symbol} ${modeLabel}`)
+    setPlaybackStatusTone('neutral')
+
+    try {
+      await playGuitarChordSound(selectedChord.staffPitches, playbackMode)
+
+      if (isCurrentPlayback(token)) {
+        setPlaybackStatus(`已播放 ${selectedChord.symbol} ${modeLabel}`)
+        setPlaybackStatusTone('success')
+      }
+    } catch (error) {
+      console.error(error)
+
+      if (isCurrentPlayback(token)) {
+        setPlaybackStatus('音频播放失败，请确认浏览器允许播放声音')
+        setPlaybackStatusTone('error')
+      }
+    } finally {
+      if (isCurrentPlayback(token)) {
+        setIsPlayingChord(false)
+      }
+    }
+  }
+
+  function handleStopChordPlayback() {
+    createPlaybackToken()
+    stopGuitarChordPlayback()
+    setIsPlayingChord(false)
+    setPlaybackStatus('已停止播放')
+    setPlaybackStatusTone('neutral')
+  }
+
+  function createPlaybackToken(): number {
+    playbackTokenRef.current += 1
+    return playbackTokenRef.current
+  }
+
+  function isCurrentPlayback(token: number): boolean {
+    return isMountedRef.current && playbackTokenRef.current === token
   }
 
   return (
@@ -35,13 +129,19 @@ export function GuitarChordReadingPage({ isActive = true }: GuitarChordReadingPa
           <p className="module-kicker">guitar chord reference</p>
           <h1>吉他和弦识读</h1>
           <p>
-            搜索常见吉他和弦，查看中文名称、组成音、五线谱写法，以及多个常用按法。这里只做识读和查阅，不包含听辨、答题、计分或练习记录。
+            搜索常见吉他和弦，查看中文名称、组成音、五线谱写法、声音试听，以及多个常用按法。这里只做识读和查阅，不包含答题、计分或练习记录。
           </p>
         </div>
       </header>
 
       <div className="chord-browser-layout">
         <aside className="chord-browser-sidebar" aria-label="和弦搜索和结果">
+          <div className="chord-sidebar-header">
+            <p className="module-kicker">chord library</p>
+            <h2>和弦目录</h2>
+            <p>输入符号或名称筛选，也可以直接从常见和弦中选择。</p>
+          </div>
+
           <label className="chord-search-field">
             <span>搜索和弦名称</span>
             <input
@@ -52,9 +152,11 @@ export function GuitarChordReadingPage({ isActive = true }: GuitarChordReadingPa
             />
           </label>
 
-          <div className="status-line chord-result-status" role="status">
+          <div className="status-line chord-result-status" role="status" aria-label="搜索结果状态">
             {results.length > 0
-              ? `找到 ${results.length} 个和弦。${query.trim() ? '可继续输入以缩小范围。' : '默认显示常见和弦库。'}`
+              ? query.trim()
+                ? `搜索结果 · ${results.length} 个`
+                : `常见和弦 · ${results.length} 个`
               : `没有找到“${query}”相关和弦。`}
           </div>
 
@@ -79,13 +181,44 @@ export function GuitarChordReadingPage({ isActive = true }: GuitarChordReadingPa
           )}
         </aside>
 
-        <ChordDetail chord={selectedChord} />
+        <ChordDetail
+          chord={selectedChord}
+          playbackMode={playbackMode}
+          playbackStatus={playbackStatus}
+          playbackStatusTone={playbackStatusTone}
+          isPlayingChord={isPlayingChord}
+          onPlaybackModeChange={handlePlaybackModeChange}
+          onPlayChord={handlePlayChord}
+          onStopChordPlayback={handleStopChordPlayback}
+        />
       </div>
     </section>
   )
 }
 
-function ChordDetail({ chord }: { chord: GuitarChord }) {
+interface ChordDetailProps {
+  chord: GuitarChord
+  playbackMode: GuitarChordPlaybackMode
+  playbackStatus: string
+  playbackStatusTone: PlaybackStatusTone
+  isPlayingChord: boolean
+  onPlaybackModeChange: (mode: GuitarChordPlaybackMode) => void
+  onPlayChord: () => void
+  onStopChordPlayback: () => void
+}
+
+function ChordDetail({
+  chord,
+  playbackMode,
+  playbackStatus,
+  playbackStatusTone,
+  isPlayingChord,
+  onPlaybackModeChange,
+  onPlayChord,
+  onStopChordPlayback,
+}: ChordDetailProps) {
+  const playbackModeLabel = getPlaybackModeLabel(playbackMode)
+
   return (
     <article className="chord-detail-panel" aria-label={`${chord.symbol} 和弦详情`}>
       <div className="chord-detail-heading">
@@ -113,6 +246,43 @@ function ChordDetail({ chord }: { chord: GuitarChord }) {
         </div>
       </div>
 
+      <section className="chord-playback-panel" aria-label="和弦声音试听">
+        <div>
+          <h3>声音试听</h3>
+          <p>默认播放整和弦，也可以切换为逐音播放的分解和弦。</p>
+        </div>
+
+        <div className="chord-playback-controls">
+          <div className="segmented-control chord-playback-mode-control" aria-label="播放方式">
+            {GUITAR_CHORD_PLAYBACK_MODES.map((mode) => (
+              <button
+                key={mode.id}
+                type="button"
+                className={playbackMode === mode.id ? 'is-active' : ''}
+                aria-pressed={playbackMode === mode.id}
+                disabled={isPlayingChord}
+                onClick={() => onPlaybackModeChange(mode.id)}
+              >
+                {mode.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="toolbar chord-playback-actions">
+            <button type="button" className="primary-action" disabled={isPlayingChord} onClick={onPlayChord}>
+              {isPlayingChord ? '播放中' : `播放${playbackModeLabel}`}
+            </button>
+            <button type="button" className="secondary-action" disabled={!isPlayingChord} onClick={onStopChordPlayback}>
+              停止
+            </button>
+          </div>
+        </div>
+
+        <div className={`status-line chord-playback-status${playbackStatusTone === 'neutral' ? '' : ` tone-${playbackStatusTone}`}`} role="status" aria-label="播放状态">
+          {playbackStatus}
+        </div>
+      </section>
+
       <section className="chord-info-card" aria-label="和弦组成音">
         <h3>组成音</h3>
         <p>{formatChordToneText(chord)}</p>
@@ -124,21 +294,6 @@ function ChordDetail({ chord }: { chord: GuitarChord }) {
             </li>
           ))}
         </ul>
-      </section>
-
-      <section className="staff-info-panel" aria-label="五线谱信息">
-        <div>
-          <h3>五线谱信息</h3>
-          <p>高音谱号：{formatStaffPitchText(chord)}</p>
-        </div>
-        <div className="staff-stage chord-staff-stage">
-          <StaffNotation
-            clef="treble"
-            pitches={chord.staffPitches}
-            notationMode="chord"
-            ariaLabel="和弦构成音五线谱"
-          />
-        </div>
       </section>
 
       <section aria-label="常用吉他指法">
@@ -164,6 +319,21 @@ function ChordDetail({ chord }: { chord: GuitarChord }) {
           ))}
         </div>
       </section>
+
+      <section className="staff-info-panel" aria-label="五线谱信息">
+        <div>
+          <h3>五线谱信息</h3>
+          <p>高音谱号：{formatStaffPitchText(chord)}</p>
+        </div>
+        <div className="staff-stage chord-staff-stage">
+          <StaffNotation
+            clef="treble"
+            pitches={chord.staffPitches}
+            notationMode="chord"
+            ariaLabel="和弦构成音五线谱"
+          />
+        </div>
+      </section>
     </article>
   )
 }
@@ -172,6 +342,10 @@ function getSelectedChord(results: readonly GuitarChord[], selectedChordId: Guit
   const currentSelection = results.find((chord) => chord.id === selectedChordId) ?? getGuitarChordById(selectedChordId)
 
   return currentSelection ?? results[0] ?? GUITAR_CHORDS[0]
+}
+
+function getPlaybackModeLabel(mode: GuitarChordPlaybackMode): string {
+  return GUITAR_CHORD_PLAYBACK_MODES.find((option) => option.id === mode)?.label ?? '整和弦'
 }
 
 export default GuitarChordReadingPage
