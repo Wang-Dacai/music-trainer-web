@@ -11,9 +11,10 @@ import {
 } from './domain/practiceHistory'
 import EarTrainingPage from './ui/pages/EarTrainingPage'
 
-type ModuleKey = 'ear-training' | 'interval-trainer' | 'guitar-chord-reading'
+type ModuleKey = 'ear-training' | 'interval-trainer' | 'rhythm-trainer' | 'guitar-chord-reading'
 
 const IntervalTrainerPage = lazy(() => import('./ui/pages/IntervalTrainerPage'))
+const RhythmTrainerPage = lazy(() => import('./ui/pages/RhythmTrainerPage'))
 const GuitarChordReadingPage = lazy(() => import('./ui/pages/GuitarChordReadingPage'))
 
 const MODULES: Array<{
@@ -32,6 +33,11 @@ const MODULES: Array<{
     subtitle: '看五线谱并判断音符和音程',
   },
   {
+    key: 'rhythm-trainer',
+    label: 'Rhythm Trainer',
+    subtitle: '听常用节奏参考',
+  },
+  {
     key: 'guitar-chord-reading',
     label: 'Guitar Chords',
     subtitle: '吉他和弦识读',
@@ -41,12 +47,17 @@ const MODULES: Array<{
 function App() {
   const [activeModule, setActiveModule] = useState<ModuleKey>('ear-training')
   const [isIntervalTrainerMounted, setIsIntervalTrainerMounted] = useState(false)
+  const [isRhythmTrainerMounted, setIsRhythmTrainerMounted] = useState(false)
   const [isGuitarChordReadingMounted, setIsGuitarChordReadingMounted] = useState(false)
   const [practiceHistory, setPracticeHistory] = useState<PracticeHistory>(() => loadPracticeHistory())
 
   function handleSelectModule(module: ModuleKey) {
     if (module === 'interval-trainer') {
       setIsIntervalTrainerMounted(true)
+    }
+
+    if (module === 'rhythm-trainer') {
+      setIsRhythmTrainerMounted(true)
     }
 
     if (module === 'guitar-chord-reading') {
@@ -107,6 +118,14 @@ function App() {
         </div>
       )}
 
+      {(isRhythmTrainerMounted || activeModule === 'rhythm-trainer') && (
+        <div hidden={activeModule !== 'rhythm-trainer'}>
+          <Suspense fallback={<section className="module-panel module-loading">正在加载节奏参考...</section>}>
+            <RhythmTrainerPage isActive={activeModule === 'rhythm-trainer'} onSessionComplete={handleSessionComplete} />
+          </Suspense>
+        </div>
+      )}
+
       {(isGuitarChordReadingMounted || activeModule === 'guitar-chord-reading') && (
         <div hidden={activeModule !== 'guitar-chord-reading'}>
           <Suspense fallback={<section className="module-panel module-loading">正在加载吉他和弦识读...</section>}>
@@ -115,7 +134,7 @@ function App() {
         </div>
       )}
 
-      {activeModule !== 'guitar-chord-reading' && (
+      {activeModule !== 'guitar-chord-reading' && activeModule !== 'rhythm-trainer' && (
         <PracticeRecordsPanel history={practiceHistory} onDeleteSession={handleDeleteSession} />
       )}
     </main>

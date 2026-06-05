@@ -1,14 +1,23 @@
-import { describe, expect, it } from 'vitest'
+/**
+ * @vitest-environment jsdom
+ */
+import { afterEach, describe, expect, it } from 'vitest'
 import {
   addPracticeSession,
   createPracticeSessionRecord,
   EMPTY_PRACTICE_HISTORY,
   getModuleLabel,
+  loadPracticeHistory,
   removePracticeSession,
+  savePracticeHistory,
   summarizePracticeHistory,
 } from './practiceHistory'
 
 describe('practiceHistory', () => {
+  afterEach(() => {
+    window.localStorage?.clear()
+  })
+
   it('creates stable practice session records from session input', () => {
     const record = createPracticeSessionRecord(
       {
@@ -54,23 +63,51 @@ describe('practiceHistory', () => {
       new Date('2026-05-31T12:05:00.000Z'),
       () => 0.2,
     )
+    const third = createPracticeSessionRecord(
+      {
+        module: 'rhythm-trainer',
+        completedItems: 5,
+        correctItems: 4,
+        detail: '4/4 · 入门 · 72 BPM',
+      },
+      new Date('2026-05-31T12:10:00.000Z'),
+      () => 0.3,
+    )
 
-    const history = addPracticeSession(addPracticeSession(EMPTY_PRACTICE_HISTORY, first), second)
+    const history = addPracticeSession(addPracticeSession(addPracticeSession(EMPTY_PRACTICE_HISTORY, first), second), third)
     const summary = summarizePracticeHistory(history)
 
-    expect(history.sessions[0]).toBe(second)
+    expect(history.sessions[0]).toBe(third)
     expect(summary).toEqual({
-      totalSessions: 2,
-      totalItems: 10,
-      correctItems: 6,
-      accuracy: 60,
-      latestSession: second,
+      totalSessions: 3,
+      totalItems: 15,
+      correctItems: 10,
+      accuracy: 67,
+      latestSession: third,
     })
   })
 
   it('returns Chinese module labels', () => {
     expect(getModuleLabel('ear-training')).toBe('单音听辨')
     expect(getModuleLabel('interval-trainer')).toBe('五线谱练习')
+    expect(getModuleLabel('rhythm-trainer')).toBe('节奏训练')
+  })
+
+  it('loads rhythm trainer records from localStorage', () => {
+    const session = createPracticeSessionRecord(
+      {
+        module: 'rhythm-trainer',
+        completedItems: 5,
+        correctItems: 4,
+        detail: '4/4 · 入门 · 72 BPM',
+      },
+      new Date('2026-05-31T12:10:00.000Z'),
+      () => 0.3,
+    )
+
+    savePracticeHistory({ sessions: [session] })
+
+    expect(loadPracticeHistory()).toEqual({ sessions: [session] })
   })
 
   it('removes a practice session by id', () => {

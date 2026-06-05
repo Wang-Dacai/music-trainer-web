@@ -20,6 +20,8 @@ output/
 
 # 本地工作资料和内部文档：不公开提交
 PLAN.md
+INSTRUCTION.md
+INSTRUCTIONS.md
 docs/
 .local/
 .local-docs/

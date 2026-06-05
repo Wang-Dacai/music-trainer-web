@@ -1,4 +1,4 @@
-export type PracticeModuleId = 'ear-training' | 'interval-trainer'
+export type PracticeModuleId = 'ear-training' | 'interval-trainer' | 'rhythm-trainer'
 
 export interface PracticeSessionInput {
   module: PracticeModuleId
@@ -70,9 +70,14 @@ export function summarizePracticeHistory(history: PracticeHistory): PracticeHist
   }
 }
 
+const PRACTICE_MODULE_LABELS: Record<PracticeModuleId, string> = {
+  'ear-training': '单音听辨',
+  'interval-trainer': '五线谱练习',
+  'rhythm-trainer': '节奏训练',
+}
+
 export function getModuleLabel(module: PracticeModuleId): string {
-  if (module === 'ear-training') return '单音听辨'
-  return '五线谱练习'
+  return PRACTICE_MODULE_LABELS[module]
 }
 
 export function loadPracticeHistory(): PracticeHistory {
@@ -118,7 +123,7 @@ function isPracticeSessionRecord(value: unknown): value is PracticeSessionRecord
 
   const candidate = value as PracticeSessionRecord
   return (
-    (candidate.module === 'ear-training' || candidate.module === 'interval-trainer') &&
+    (candidate.module === 'ear-training' || candidate.module === 'interval-trainer' || candidate.module === 'rhythm-trainer') &&
     typeof candidate.id === 'string' &&
     typeof candidate.createdAt === 'string' &&
     typeof candidate.completedItems === 'number' &&

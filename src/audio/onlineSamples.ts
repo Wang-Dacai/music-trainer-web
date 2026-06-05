@@ -28,6 +28,13 @@ export interface OnlineSamplePlaybackOptions {
   shouldContinue?: () => boolean
 }
 
+export interface OnlineSampleSequenceEvent {
+  pitches: readonly Pitch[]
+  startMs: number
+  durationMs: number
+  gainScale?: number
+}
+
 const PIANO_SAMPLE_BASE_URL = 'https://tonejs.github.io/audio/salamander'
 const TONEJS_INSTRUMENT_SAMPLE_BASE_URL = 'https://nbrosowsky.github.io/tonejs-instruments/samples'
 
@@ -328,6 +335,90 @@ export async function playOnlineSamplePitches(
   }
 }
 
+export async function playOnlineSampleSequence(
+  events: readonly OnlineSampleSequenceEvent[],
+  instrumentId: OnlineSampleInstrumentId,
+  options: OnlineSamplePlaybackOptions = {},
+): Promise<void> {
+  stopOnlineSample()
+
+  const playableEvents = events.filter((event) => event.pitches.length > 0 && event.durationMs > 0)
+
+  if (playableEvents.length === 0) {
+    return
+  }
+
+  const context = await getAudioContext()
+  const instrument = getOnlineSampleInstrument(instrumentId)
+  const currentPlayback: ActiveSamplePlayback = { id: ++playbackId, voices: [] }
+  activePlayback = currentPlayback
+
+  try {
+    const scheduledEvents = await Promise.all(
+      playableEvents.map(async (event) => {
+        const loadedSamples = await Promise.all(
+          event.pitches.map(async (pitch) => {
+            const sample = findNearestSample(pitch.midiNumber, instrument.samples)
+            const buffer = await loadAudioBuffer(sample.url)
+
+            return { pitch, sample, buffer }
+          }),
+        )
+
+        return { event, loadedSamples }
+      }),
+    )
+
+    if (activePlayback?.id !== currentPlayback.id || options.shouldContinue?.() === false) {
+      if (activePlayback?.id === currentPlayback.id) {
+        activePlayback = null
+      }
+      return
+    }
+
+    const sequenceStartAt = context.currentTime + 0.045
+    const latestEndMs = Math.max(...scheduledEvents.map(({ event }) => event.startMs + event.durationMs))
+
+    scheduledEvents.forEach(({ event, loadedSamples }) => {
+      const eventStartAt = sequenceStartAt + event.startMs / 1000
+      const durationSeconds = event.durationMs / 1000
+      const stopAt = eventStartAt + durationSeconds
+      const releaseSeconds = Math.min(instrument.releaseSeconds, durationSeconds / 2)
+      const gainValue = instrument.gain * (options.gainScale ?? 1) * (event.gainScale ?? 1)
+
+      loadedSamples.forEach(({ pitch, sample, buffer }) => {
+        const source = context.createBufferSource()
+        const gainNode = context.createGain()
+
+        source.buffer = buffer
+        source.playbackRate.setValueAtTime(2 ** ((pitch.midiNumber - sample.midiNumber) / 12), eventStartAt)
+
+        gainNode.gain.setValueAtTime(0.0001, eventStartAt)
+        gainNode.gain.linearRampToValueAtTime(gainValue, eventStartAt + 0.012)
+        gainNode.gain.setValueAtTime(gainValue, Math.max(eventStartAt + 0.012, stopAt - releaseSeconds))
+        gainNode.gain.linearRampToValueAtTime(0.0001, stopAt)
+
+        source.connect(gainNode)
+        gainNode.connect(context.destination)
+        source.start(eventStartAt)
+        source.stop(stopAt + 0.04)
+        currentPlayback.voices.push({ source, gainNode })
+      })
+    })
+
+    await waitForMilliseconds(latestEndMs + 120)
+  } catch (error) {
+    if (activePlayback?.id === currentPlayback.id) {
+      stopOnlineSample()
+    }
+    throw error
+  }
+
+  if (activePlayback?.id === currentPlayback.id) {
+    stopOnlineSample()
+  }
+}
+
 export function stopOnlineSample(): void {
   if (!activePlayback) {
     return
@@ -434,6 +525,12 @@ function waitForSampleEnd(source: AudioBufferSourceNode, timeoutMs: number): Pro
     const timeoutId = window.setTimeout(finish, timeoutMs)
 
     source.addEventListener('ended', finish, { once: true })
+  })
+}
+
+function waitForMilliseconds(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, milliseconds)
   })
 }
 

@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import '@testing-library/jest-dom/vitest'
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
@@ -22,12 +22,30 @@ vi.mock('./audio/staffPlayback', () => ({
   stopStaffPlayback: vi.fn(),
 }))
 
+vi.mock('./audio/rhythmPlayback', () => ({
+  DEFAULT_RHYTHM_DEMO_INSTRUMENT_ID: 'acousticGuitar',
+  DEFAULT_RHYTHM_REPEAT_COUNT: 2,
+  RHYTHM_DEMO_INSTRUMENTS: [{ id: 'acousticGuitar', label: '原声吉他', summary: '短音清楚。' }],
+  RHYTHM_REPEAT_OPTIONS: [1, 2, 4],
+  playRhythmPatternDemo: vi.fn(() => Promise.resolve()),
+  stopRhythmPlayback: vi.fn(),
+}))
+
+vi.mock('./ui/components/RhythmPatternView', () => ({
+  default: ({ pattern }: { pattern: { title: string; summary: string } }) => (
+    <div role="group" aria-label={`节奏型：${pattern.title}`}>
+      {pattern.summary}
+    </div>
+  ),
+}))
+
 vi.mock('./ui/components/StaffNotation', () => ({
   default: ({ ariaLabel = '五线谱题目' }: { ariaLabel?: string }) => <div aria-label={ariaLabel}>mock staff</div>,
 }))
 
 describe('App', () => {
   afterEach(() => {
+    vi.useRealTimers()
     cleanup()
     vi.restoreAllMocks()
     window.localStorage.clear()
@@ -107,6 +125,25 @@ describe('App', () => {
 
     expect(screen.getByLabelText('五线谱题目')).toHaveTextContent('mock staff')
     expect(screen.getByRole('button', { name: '开始练习' })).toBeDisabled()
+  })
+
+  it('keeps the active Rhythm Trainer selection without creating practice records', async () => {
+    render(<App />)
+    expect(screen.getByRole('button', { name: /Rhythm Trainer/ })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Rhythm Trainer/ }))
+    await screen.findByRole('heading', { name: 'Rhythm Trainer：节奏参考' })
+    fireEvent.change(screen.getByRole('combobox', { name: '分类' }), { target: { value: 'syncopation' } })
+    fireEvent.click(screen.getByRole('button', { name: /3-3-2/ }))
+    expect(screen.getByRole('group', { name: /节奏型：3-3-2 \/ Tresillo/ })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: '练习记录' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Ear Training/ }))
+    expect(screen.getByLabelText('逐条练习记录')).toHaveTextContent('还没有练习记录')
+
+    fireEvent.click(screen.getByRole('button', { name: /Rhythm Trainer/ }))
+    expect(screen.getByRole('group', { name: /节奏型：3-3-2 \/ Tresillo/ })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: '练习记录' })).not.toBeInTheDocument()
   })
 
   it('opens the guitar chord reference without creating practice records and keeps its browsing state', async () => {
